@@ -34,6 +34,24 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     if (width < 500) await screenshot(`${roleName}-${width}-viewport`, false);
   };
 
+  await stage('route progress and capacity remain accurate with stale preparation flags', async () => {
+    await run("state.ready=true;state.confirmed=true;state.started=true;assigned()[0].status='Delivered';assigned()[0].deliveredAt='09:25';assigned()[0].recipient='Store manager';assigned()[1].status='In transit';render()");
+    assert.match(await mainText(),/Partially completed/);
+    assert.match(await mainText(),/1 of 2 stops delivered/);
+    assert.equal(await run("document.querySelector('.capacity-track').getAttribute('aria-valuenow')"),'270');
+    assert.match(await run("document.querySelector('.dispatch-pulse').innerText"),/930 kg free/);
+    assert.doesNotMatch(await mainText(),/Ready for the road|Ready to dispatch/);
+    await screenshot('dispatch-partial-1440');
+    await run("assigned()[1].issue='Store closed';assigned()[1].status='Issue';assigned()[1].deferred=true;render()");
+    assert.match(await mainText(),/Exception/);
+    assert.match(await mainText(),/1 outstanding/);
+    await screenshot('dispatch-exception-1440');
+    await run("state=seed();state.orders.forEach(o=>{o.route=null;o.status='Pending'});render()");
+    assert.equal(await run("document.querySelector('[data-action=confirm-dispatch]').disabled"),true);
+    assert.doesNotMatch(await mainText(),/Route completed/);
+    await run("state=seed();render()");
+  });
+
   await stage('queue search, filtering and mobile planning keyboard tabs', async () => {
     await input('#queue-search', 'no-matching-order');
     assert.equal(await run("document.querySelectorAll('#queue-list [data-action=assign]').length"), 0);
@@ -47,6 +65,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     await capture('dispatch', 1440);
     await viewport(1440, 900);
     await screenshot('dispatch-1440-900');
+    await capture('dispatch', 1280, 900);
     await capture('dispatch', 1024);
     await click('#plan-tab-route');
     await screenshot('dispatch-1024-route');
@@ -66,6 +85,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
   });
 
   await stage('store search, quantities, keyboard review and order submission', async () => {
+    await run("queueQuery='stale search hiding all orders';queueFilter='priority';dispatchPanel='vehicle'");
     await click('[data-role="store"]');
     assert.equal(await run("document.querySelector('[data-action=create-order]').disabled"), true);
     await input('#product-search', 'no-matching-product');
@@ -112,6 +132,11 @@ test('Relay: connected order, planning constraints, field exceptions and respons
 
   await stage('dispatch protects capacity, selects vehicles and releases the same order', async () => {
     await click('[data-action="go-dispatch"]');
+    await waitFor("document.activeElement?.dataset.id === 'ORD-2847'", 'new order receives focus');
+    assert.deepEqual(await run('({panel:dispatchPanel,query:queueQuery,filter:queueFilter,selected:selectedOrderId})'), {panel:'queue',query:'',filter:'all',selected:'ORD-2847'});
+    assert.equal(await run("document.querySelector('#queue-list .order-card [data-action=select-order]').dataset.id"), 'ORD-2847');
+    assert.equal(await run("document.querySelector('[data-action=select-order][data-id=ORD-2847]').getAttribute('aria-pressed')"), 'true');
+    await screenshot('dispatch-new-order');
     await click('[data-action="fleet"]');
     await click('[data-action="select-vehicle"][data-id="TRK-218"]');
     assert.equal(await run('activeVehicle().capacity'), 1500);
@@ -250,6 +275,81 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     assert.match(await run("document.querySelector('#dialog').innerText"), /Nimasha Perera/);
     await key('Escape');
     await screenshot('store-delivered');
+  });
+
+  await stage('completed route is consistent across dispatcher, vehicle and receipts', async () => {
+    await click('[data-role="dispatch"]');
+    assert.equal(await run('dispatchRouteState().key'), 'completed');
+    assert.equal(await run('dispatchRouteState().delivered'), 3);
+    for (const width of [1440,1280,1024]) {
+      await viewport(width,900);
+      if(width<=1100) await click('#plan-tab-route');
+      const text=await mainText();
+      assert.match(text,/Route completed at/);
+      assert.match(text,/3 of 3 stops delivered/);
+      assert.doesNotMatch(text,/Ready for the road|Ready to dispatch|Ready to load/);
+      await screenshot(`dispatch-completed-${width}`);
+      if(width<=1100){
+        await click('#plan-tab-vehicle');
+        assert.match(await mainText(),/Completed/);
+        assert.match(await mainText(),/No outstanding exceptions/);
+        await click('#plan-tab-route');
+      }
+    }
+    await click('[data-action="route-review"]');
+    assert.match(await run("document.querySelector('#dialog').innerText"),/Route completed at/);
+    assert.match(await run("document.querySelector('#dialog').innerText"),/Nimasha Perera/);
+    assert.doesNotMatch(await run("document.querySelector('#dialog').innerText"),/Ready for the road/);
+    await key('Escape');
+    for(const width of [1440,1280,1024]) {
+      await viewport(width,900);
+      await run("dispatchPanel='route';render();window.scrollTo(0,document.documentElement.scrollHeight)");
+      const layout=await run(`(() => {
+        const heading=document.querySelector('.view-dispatch>.page-heading').getBoundingClientRect();
+        const tabs=document.querySelector('.planning-tabs');
+        const scrollers=[...document.querySelectorAll('#main *')].filter(el=>['auto','scroll'].includes(getComputedStyle(el).overflowY)&&el.scrollHeight>el.clientHeight+1);
+        return {headingTop:heading.top,headingBottom:heading.bottom,tabsTop:tabs.getBoundingClientRect().top,scrollers:scrollers.map(el=>el.className)};
+      })()`);
+      assert.deepEqual(layout.scrollers,[],`Dispatcher has no competing panel scrollbars at ${width}.`);
+      assert.ok(layout.headingTop>=0,'Primary actions remain visible while scrolling.');
+      if(width===1024)assert.ok(layout.tabsTop>=layout.headingBottom-1,'Planning tabs do not overlap the sticky actions.');
+    }
+  });
+
+  await stage('sidebar and hash handoffs reveal new orders without resetting the route', async () => {
+    const completedState=await run('JSON.stringify(state)');
+    try {
+      for (const navigation of ['sidebar','hash']) {
+        await viewport(navigation==='sidebar'?390:1024,900);
+        await run("state=seed();save();pendingDispatchOrderId=null;revealedDispatchOrderId=null;queueQuery='hidden';queueFilter='priority';dispatchPanel='vehicle';role='store';tab='replenishment';location.hash='store';render()");
+        await click('[data-action="recommended"]');
+        await click('[data-action="create-order"]');
+        await click('[data-action="place-order"]');
+        await click('#dialog .dialog-actions [data-action="close"]');
+        if(navigation==='sidebar')await click('.nav [data-role="dispatch"]');
+        else await run("location.hash='dispatch'");
+        await waitFor("role==='dispatch' && document.activeElement?.dataset.id==='ORD-2847'");
+        const visible=await run(`(() => {const el=document.querySelector('#queue-list .order-card');const r=el.getBoundingClientRect();return {id:el.querySelector('[data-action=select-order]').dataset.id,top:r.top,bottom:r.bottom};})()`);
+        assert.equal(visible.id,'ORD-2847');
+        assert.ok(visible.top>=0&&visible.bottom<=900-(navigation==='sidebar'?72:0),'New order card is visible without searching or scrolling.');
+        assert.equal(await run('assigned().length'),2,'The existing route is preserved.');
+        assert.equal(await run('state.confirmed'),false);
+        assert.equal(await run('state.offline'),false);
+        await screenshot(`dispatch-handoff-${navigation}`);
+      }
+      // A post-release Store request must also appear, while the completed route stays intact.
+      await run(`state=JSON.parse(${JSON.stringify(completedState)});save();queueQuery='hidden';queueFilter='priority';dispatchPanel='vehicle';role='store';tab='replenishment';render()`);
+      await click('[data-action="store-step"][data-product="0"][data-delta="1"]');
+      await click('[data-action="create-order"]');await click('[data-action="place-order"]');
+      await click('#dialog .dialog-actions [data-action="close"]');
+      await click('.nav [data-role="dispatch"]');
+      await waitFor("document.activeElement?.dataset.id==='ORD-2848'");
+      assert.equal(await run('dispatchRouteState().key'),'completed');
+      assert.equal(await run("state.orders.find(o=>o.id==='ORD-2848').nextRun"),true);
+      assert.match(await mainText(),/Queued for the next run/);
+    } finally {
+      await run(`state=JSON.parse(${JSON.stringify(completedState)});save();pendingDispatchOrderId=null;revealedDispatchOrderId=null;role='dispatch';render()`);
+    }
   });
 
   await t.test('all roles fit every requested viewport and pages have meaningful labels', async () => {

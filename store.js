@@ -166,6 +166,7 @@ function handleStoreAction(action, button, o) {
     if (!count) return true;
     const id = `ORD-${Math.max(...state.orders.map(order => Number(order.id.slice(4)))) + 1}`;
     state.orders.push({ id, store: 'Keells · Nugegoda', area: 'Nugegoda', address: '138, High Level Road, Nugegoda', window: 'To be confirmed', requestedDay: 'Next run', nextRun: true, weight: quantities.reduce((sum, q, i) => sum + q * products[i].weight, 0), cartons: count, items: [...quantities], status: 'Pending', route: null, loaded: false, issue: '' });
+    pendingDispatchOrderId = id;
     record(`${id} requested by Keells · Nugegoda for the next dispatch run`);
     quantities = products.map(() => 0); tab = 'orders'; render();
     openDialog(`<div class="success-mark">${icon('check')}</div><h2>Your next-run request is saved.</h2><p>${id} · ${count} cartons<br>The morning run has closed. This order is queued for a future run; its delivery window is not yet confirmed.</p><div class="notice green">Your request is visible in the dispatch queue. This demo releases one route per run.</div><div class="dialog-actions"><button class="btn primary" data-action="close">Track order ${icon('arrow')}</button></div>`);

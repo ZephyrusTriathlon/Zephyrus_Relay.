@@ -1,5 +1,6 @@
 /* Field operations: a shared manifest, tablet loading and mobile delivery. */
 let fieldRouteOpen = false;
+const fieldScrollBehavior = () => matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth';
 
 function fieldVehicle() {
   const vehicle=typeof activeVehicle === 'function' ? activeVehicle() : {id:'TRK-214',driver:'Amal Perera',capacity:1200,bay:'03',plate:'WP LY-4821'};
@@ -55,7 +56,7 @@ function deliveryView() {
   <section class="driver-focus" aria-label="Current delivery">
     <header class="driver-route-header"><div class="driver-route-top"><div><span class="eyebrow">R-07 · Morning run</span><h2>Colombo East</h2></div><span class="field-status ${complete?'success':''}">${complete?'Complete':state.started?'On the road':state.ready?'Ready to depart':'Preparing'}</span></div><div class="driver-progress-label"><span><b>${done}</b> / ${list.length} delivered</span><button class="mini-btn" data-action="field-route-toggle" aria-expanded="${fieldRouteOpen}" aria-controls="driver-route-overview">${fieldRouteOpen?'Hide route':'View route'} ${icon('chevron')}</button></div><div class="driver-progress" role="progressbar" aria-label="Deliveries completed" aria-valuemin="0" aria-valuemax="${list.length||1}" aria-valuenow="${done}">${list.map(o=>`<span class="${o.status==='Delivered'?'complete':o.deferred?'deferred':''}"></span>`).join('')}</div></header>
     ${!state.ready?`<div class="driver-empty"><span class="field-state-icon">${icon('box')}</span><div class="eyebrow">Getting you road-ready</div><h2>Your route is being prepared.</h2><p>The warehouse is checking and loading your shipments. You can depart once the manifest is complete.</p><div class="driver-preparation"><div><span>Dispatch</span><b>${state.confirmed?'Released':'Planning'}</b></div><div><span>Shipments loaded</span><b>${list.filter(o=>o.loaded).length} / ${list.length}</b></div><div><span>Departure</span><b>09:00 · ${esc(v.bay)}</b></div></div><button class="btn primary wide" data-role="loader">Check loading progress ${icon('arrow')}</button></div>`:complete?`<div class="driver-empty delivery-finished"><span class="field-state-icon">${icon('check')}</span><div class="eyebrow">Route complete</div><h2>A good run.<br>Every store replenished.</h2><p>${list.length} successful stops. ${list.reduce((n,o)=>n+o.cartons,0)} cartons delivered across Colombo East.</p><div class="completion-receipt"><span>${icon(state.pending.length?'wifi':'check')}</span><div><b>${state.pending.length?'Receipts saved on this device':'All delivery receipts saved'}</b><p>${state.pending.length?`${state.pending.length} updates waiting to sync. Reconnect to complete the handoff.`:'The store and dispatch views now show every completed delivery.'}</p></div></div><button class="btn wide" data-action="activity">View delivery receipts ${icon('arrow')}</button></div>`:!next?`<div class="driver-empty"><span class="field-state-icon is-amber">${icon('clock')}</span><div class="eyebrow">${deferred.length} stop${deferred.length!==1?'s':''} to revisit</div><h2>Your route is still open.</h2><p>${done} of ${list.length} delivered. Review the stops below and retry when the store is ready. These deliveries are still outstanding.</p>${deferred.map(o=>`<div class="return-stop"><div><b>${esc(o.store)}</b><p>${esc(o.issueType||'Delivery issue')}</p><small>Shipment awaiting reconciliation</small></div><button class="btn" data-action="retry-stop" data-id="${o.id}">Retry stop ${icon('refresh')}</button></div>`).join('')}</div>`:`
-    <div class="driver-stop"><div class="driver-stop-eyebrow"><span class="eyebrow">${next.returnRequested?'Return visit':next.arrived?'At your stop':state.started?'Next stop':'First stop'} · ${stop} of ${list.length}</span>${next.arrived?'<span class="arrival-mark">'+icon('check')+' Arrived</span>':''}</div><h1>${esc(next.store).replace(' · ','<span>')}${next.store.includes(' · ')?'</span>':''}</h1><p class="driver-address">${icon('pin')}<span>${esc(next.address)}</span></p><div class="driver-window"><span>${icon('clock')} Delivery window</span><b>${esc(next.window)}</b></div>
+    <div class="driver-stop"><div class="driver-stop-eyebrow"><span class="eyebrow">${next.returnRequested?'Return visit':next.arrived?'At your stop':state.started?'Next stop':'First stop'} · ${stop} of ${list.length}</span>${next.arrived?'<span class="arrival-mark">'+icon('check')+' Arrived</span>':''}</div><h2>${esc(next.store).replace(' · ','<span>')}${next.store.includes(' · ')?'</span>':''}</h2><p class="driver-address">${icon('pin')}<span>${esc(next.address)}</span></p><div class="driver-window"><span>${icon('clock')} Delivery window</span><b>${esc(next.window)}</b></div>
     <div class="driver-navigation"><a class="btn" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(next.address+', Sri Lanka')}" target="_blank" rel="noopener">${icon('navigate')} Navigate</a><button class="btn" data-action="contact" data-id="${next.id}">${icon('phone')} Contact store</button></div>
     <div class="driver-shipment"><div><span class="eyebrow">${esc(next.id)}</span><b>${next.cartons} <span>cartons</span></b></div><div><small>${next.items.filter(Boolean).length} products · ${next.weight} kg</small><button class="mini-btn" data-action="order-detail" data-id="${next.id}">View items ${icon('chevron')}</button></div></div>
     ${next.resolution&&next.returnRequested?`<div class="driver-return-note">${icon('check')} Return visit · ${esc(next.resolution)}</div>`:''}${next.issue?`<div class="notice">${icon('warning')} ${esc(next.issue)}</div>`:''}
@@ -65,14 +66,14 @@ function deliveryView() {
     ${deferred.length?`<button class="deferred-reminder" data-action="field-return-list">${icon('clock')}<span><b>${deferred.length} stop${deferred.length!==1?'s':''} saved for later</b><small>Return visit needed · still outstanding</small></span>${icon('chevron')}</button>`:''}
     <p class="driver-sync-note">${icon(state.offline?'wifi':'check')}${state.offline?'Saved here. Updates sync when you reconnect.':'Progress shared in this demo workspace.'}</p></div>`}
   </section>
-  <aside class="driver-route-overview" id="driver-route-overview" aria-label="Route overview"><div class="driver-overview-heading"><div><div class="eyebrow">The route ahead</div><h2>${list.length} stops. One connected journey.</h2></div><button class="btn ghost driver-route-close" data-action="field-route-toggle" aria-label="Close route overview">${icon('close')}</button></div>${mapView()}<div class="driver-depot">${icon('box')}<div><b>Peliyagoda distribution centre</b><small>${esc(v.bay)} · ${esc(v.id)} · Departure 09:00</small></div></div>${fieldRouteList(list,next)}<div class="driver-route-note">${icon('wifi')}<p><b>Ready for the road, even offline.</b><span>Your confirmations stay on this device until you reconnect. Synchronization is simulated.</span></p></div></aside>
+  <aside class="driver-route-overview" id="driver-route-overview" aria-label="Route overview"><div class="driver-overview-heading"><div><div class="eyebrow">The route ahead</div><h2 tabindex="-1">${list.length} stops. One connected journey.</h2></div><button class="btn ghost driver-route-close" data-action="field-route-toggle" aria-label="Close route overview">${icon('close')}</button></div>${mapView()}<div class="driver-depot">${icon('box')}<div><b>Peliyagoda distribution centre</b><small>${esc(v.bay)} · ${esc(v.id)} · Departure 09:00</small></div></div>${fieldRouteList(list,next)}<div class="driver-route-note">${icon('wifi')}<p><b>Ready for the road, even offline.</b><span>Your confirmations stay on this device until you reconnect. Synchronization is simulated.</span></p></div></aside>
   </div>`;
 }
 
 function fieldFormError(message, field) {
   document.querySelectorAll('#dialog [aria-invalid="true"]').forEach(input=>{input.removeAttribute('aria-invalid');input.removeAttribute('aria-describedby');});
   let error=document.querySelector('#field-form-error');
-  if(!error){error=document.createElement('p');error.id='field-form-error';error.className='field-form-error';error.setAttribute('role','alert');document.querySelector('#dialog .dialog-actions')?.before(error);}
+  if(!error){error=document.createElement('p');error.id='field-form-error';error.className='field-form-error';error.setAttribute('role','alert');document.querySelector('#dialog .dialog-body')?.append(error);}
   error.textContent=message;
   if(field){field.setAttribute('aria-invalid','true');field.setAttribute('aria-describedby','field-form-error');field.focus();}
   toast(message);
@@ -82,7 +83,13 @@ function fieldResolution(o,retry=false) {
 }
 function handleFieldAction(action,button,o) {
   switch(action) {
-    case 'field-route-toggle': fieldRouteOpen=!fieldRouteOpen;render();if(fieldRouteOpen&&innerWidth<=760)document.querySelector('#driver-route-overview')?.scrollIntoView({behavior:'smooth',block:'start'});return true;
+    case 'field-route-toggle': {
+      fieldRouteOpen=!fieldRouteOpen;render();
+      const target=document.querySelector(fieldRouteOpen?'#driver-route-overview h2':'.driver-progress-label [data-action="field-route-toggle"]');
+      target?.focus({preventScroll:true});
+      if(innerWidth<=760)(fieldRouteOpen?document.querySelector('#driver-route-overview'):target)?.scrollIntoView({behavior:fieldScrollBehavior(),block:fieldRouteOpen?'start':'center'});
+      return true;
+    }
     case 'field-return-list': openDialog(`<div class="eyebrow">Return later</div><h2>Still on your route.</h2><p>These shipments still need reconciliation. Retry a stop when the issue has been resolved.</p>${assigned().filter(o=>o.deferred&&o.status!=='Delivered').map(o=>`<div class="return-stop"><div><b>${esc(o.store)}</b><p>${esc(o.issue)}</p></div><button class="btn" data-action="retry-stop" data-id="${o.id}">Retry</button></div>`).join('')}${dialogFooter()}`);return true;
     case 'loaded': {
       const next=assigned().slice().reverse().find(item=>!item.loaded);
@@ -125,7 +132,7 @@ function handleFieldAction(action,button,o) {
       if(!recipient?.value.trim()||recipient.value.trim().length<2){fieldFormError('Enter the recipient’s name to save the receipt.',recipient);return true;}
       if(!time?.value||!/^([01]\d|2[0-3]):[0-5]\d$/.test(time.value)){fieldFormError('Enter a valid delivery time.',time);return true;}
       o.status='Delivered';o.recipient=recipient.value.trim();o.deliveredAt=time.value;o.deliveredCartons=Number(cartons.value);o.deferred=false;o.returnRequested=false;
-      record(`${o.id}: ${o.cartons} cartons delivered to ${o.recipient} at ${o.deliveredAt} · ${o.store}`);closeDialog();render();toast(assigned().every(item=>item.status==='Delivered')?'Route complete. Every receipt is saved.':'Delivery complete. Your next step is ready.');window.scrollTo({top:0,behavior:'smooth'});return true;
+      record(`${o.id}: ${o.cartons} cartons delivered to ${o.recipient} at ${o.deliveredAt} · ${o.store}`);closeDialog();render();toast(assigned().every(item=>item.status==='Delivered')?'Route complete. Every receipt is saved.':'Delivery complete. Your next step is ready.');window.scrollTo({top:0,behavior:fieldScrollBehavior()});return true;
     }
     default:return false;
   }

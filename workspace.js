@@ -49,7 +49,9 @@ function openDialog(html) {
     dialogReturnFocus = active?.dataset.action ? `[data-action="${active.dataset.action}"]${active.dataset.id ? `[data-id="${active.dataset.id}"]` : ''}` : active?.id ? `#${active.id}` : null;
   }
   dialog.className = '';
-  dialog.innerHTML = `<button class="dialog-close btn ghost icon-btn" data-action="close" aria-label="Close dialog">${icon('close')}</button>${html}`;
+  dialog.innerHTML = `<button class="dialog-close btn ghost icon-btn" data-action="close" aria-label="Close dialog">${icon('close')}</button><div class="dialog-body">${html}</div>`;
+  const actions = dialog.querySelector('.dialog-actions');
+  if (actions) dialog.append(actions);
   const title = dialog.querySelector('h2');
   if (title) { title.id = 'dialog-title'; title.tabIndex = -1; dialog.setAttribute('aria-labelledby','dialog-title'); }
   if (!dialog.open) dialog.showModal();

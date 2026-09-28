@@ -352,6 +352,51 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     }
   });
 
+  await t.test('field sheets, long notes and route focus remain accessible', async () => {
+    const savedState = await run('JSON.stringify(state)');
+    try {
+      await run("state=seed();role='delivery';fieldRouteOpen=false;state.confirmed=state.ready=state.started=true;assigned().forEach(o=>{o.loaded=true;o.status='In transit';o.arrived=true});render()");
+      assert.equal(await run("document.querySelectorAll('#main h1').length"), 1);
+      for (const [width,height] of [[360,640],[390,844],[430,932],[768,900],[1440,900]]) {
+        await viewport(width,height);
+        await click('[data-action="verify-delivery"]');
+        const sheet = await run(`(() => {
+          const rect=selector=>document.querySelector(selector).getBoundingClientRect().toJSON();
+          return {dialog:rect('#dialog'),body:rect('.dialog-body'),footer:rect('.dialog-actions'),close:rect('.dialog-close')};
+        })()`);
+        assert.ok(sheet.dialog.top>=0 && sheet.dialog.bottom<=height, 'The sheet stays inside the viewport.');
+        assert.ok(sheet.body.bottom<=sheet.footer.top+1, 'The footer has its own space below the scrolling form.');
+        assert.ok(sheet.close.right>=sheet.dialog.right-16 && sheet.close.top<sheet.dialog.top+16, 'Close remains at the top right.');
+        for (const selector of ['#verified-cartons','#verified','#recipient','#delivery-time']) {
+          const field=await run(`(() => {const el=document.querySelector('${selector}');el.focus();return el.getBoundingClientRect().toJSON()})()`);
+          assert.ok(field.top>=sheet.body.top && field.bottom<=sheet.footer.top+1, `${selector} can be reached without footer overlap at ${width}.`);
+        }
+        await click('[data-action="delivered"]');
+        assert.equal(await run("!!document.querySelector('.dialog-body #field-form-error')"),true);
+        await screenshot(`final-proof-${width}`,false);
+        await key('Escape');
+      }
+      await viewport(360,740);
+      await send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
+      await run("window.qaScrollOptions=[];window.qaOriginalScroll=Element.prototype.scrollIntoView;Element.prototype.scrollIntoView=function(options){qaScrollOptions.push(options);return qaOriginalScroll.call(this,options)}");
+      await click('[data-action="field-route-toggle"]');
+      assert.equal(await run("document.activeElement.matches('#driver-route-overview h2')"),true);
+      assert.equal(await run('qaScrollOptions.at(-1).behavior'),'instant');
+      await click('.driver-route-close');
+      assert.equal(await run("document.activeElement.matches('.driver-progress-label [data-action=field-route-toggle]')"),true);
+      await run("Element.prototype.scrollIntoView=qaOriginalScroll;delete window.qaOriginalScroll;delete window.qaScrollOptions;role='loader';state.ready=false;assigned().forEach(o=>o.loaded=false);assigned()[1].issue='Damaged carton: '+ 'X'.repeat(200);assigned()[1].issueType='Damaged cartons';render()");
+      const note=await run("(() => {const el=document.querySelector('.shipment-exception p');const card=el.closest('.shipment').getBoundingClientRect();const r=el.getBoundingClientRect();return {right:r.right,cardRight:card.right,client:el.clientWidth,scroll:el.scrollWidth}})()");
+      assert.ok(note.right<=note.cardRight && note.scroll<=note.client+1,'Long exception notes wrap inside the shipment.');
+      await run("role='store';tab='orders';assigned()[0].store='Keells · Nugegoda';assigned()[0].area='Nugegoda';assigned()[0].status='Delivered';assigned()[0].recipient='A'.repeat(80);assigned()[0].deliveredAt='10:25';render()");
+      await click('[data-action="order-detail"]');
+      assert.equal(await run("document.querySelector('.dialog-body').scrollWidth<=document.querySelector('.dialog-body').clientWidth"),true,'Long recipient names fit the receipt.');
+      await key('Escape');
+    } finally {
+      await run(`if(window.qaOriginalScroll)Element.prototype.scrollIntoView=qaOriginalScroll;document.querySelector('#dialog').close();state=JSON.parse(${JSON.stringify(savedState)});role='dispatch';fieldRouteOpen=false;render()`);
+      await send('Emulation.setEmulatedMedia',{features:[]});
+    }
+  });
+
   await t.test('all roles fit every requested viewport and pages have meaningful labels', async () => {
     await run("document.querySelector('#dialog').close()");
     for (const width of [360, 390, 430, 768, 834, 1024, 1280, 1440]) {

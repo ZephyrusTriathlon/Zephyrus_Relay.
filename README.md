@@ -11,7 +11,22 @@ cd "C:\BACKUP 4TB\Tech-Triathlon\tech-triathlon-designathon-ui"
 node server.js
 ```
 
-Open **http://localhost:4173**. `npm start` runs the same server. Role deep links are `/#store`, `/#dispatch`, `/#loader` and `/#delivery`.
+Open **http://localhost:4173**. `npm start` runs the same server. Workspace hashes (`/#store`, `/#dispatch`, `/#loader`, `/#delivery`) respect the signed-in account; another role hash returns to your own workspace.
+
+## Seeded demo accounts
+
+These are four fictional people with fixed roles. All use the demo password **`RelayDemo!26`**.
+
+| Name | Email (or employee ID) | Assigned role |
+| --- | --- | --- |
+| Nimasha Perera | `store@relay.demo` (`store`) | STORE_MANAGER |
+| Dinuka Fernando | `dispatcher@relay.demo` (`dispatcher`) | DISPATCHER |
+| Kasun Silva | `loader@relay.demo` (`loader`) | LOADER |
+| Amal Perera | `driver@relay.demo` (`driver`) | DRIVER |
+
+Sign in with the Store account to begin. During the walkthrough use **Account > Switch demo account**, then select the next employee. This judge-only shortcut simulates signing out and signing in as a different account; shared order and route progress stay intact. It is also available on the login page and at workflow handoffs.
+
+Login is simulated in the frontend on this browser only. The separate `relay_session` entry stores only the account ID. Refresh preserves the session; **Account > Sign out** clears only the session. **Reset demo** restores operational data while keeping the current account signed in. There is no public signup, editable role, real account provisioning or server-side authorization. Frontend/localStorage changes can bypass this prototype gating.
 
 ## A complete judging walkthrough
 
@@ -22,7 +37,7 @@ Open **http://localhost:4173**. `npm start` runs the same server. Role deep link
 5. **Store → Order tracking:** the same order shows the Dispatch-calculated **Expected arrival**, delivery window, route and vehicle, then the Driver POD after delivery. Open **View receipt**, check the cartons and choose **Confirm receipt**; only then do received cartons update stock and replenishment suggestions.
 6. **Store → Dispatch issue path:** on a delivered OUT006 order choose **Report an issue**, select a type and enter useful details. Return to **Dispatch → Route** to see the completed delivery and separate Store receipt follow-up. The activity control records the shared handoffs.
 
-The sidebar or mobile bottom navigation switches demo personas at any point. **Demo guide** explains the journey and offers a confirmed reset. Reset affects Relay’s local data only.
+Use **Account > Switch demo account** between each employee in the steps above. Normal navigation contains only the signed-in workspace and account controls. **Design case study** explains the journey and offers a confirmed reset. Reset affects operational data only and preserves the signed-in account.
 
 ## Useful states to demonstrate
 
@@ -56,8 +71,10 @@ Start-Process -FilePath 'C:\Program Files\Google\Chrome\Application\chrome.exe' 
 node --test tests/browser.test.js
 ```
 
-The dependency-free test opens its own browser tab and restores the previous Relay data afterward. It never clears unrelated localStorage. Optional `RELAY_URL` and `RELAY_CDP_URL` environment variables override the server and debugging endpoints.
+The dependency-free test opens its own browser tab and restores the previous Relay data and session afterward. It never clears unrelated localStorage. Optional `RELAY_URL` and `RELAY_CDP_URL` environment variables override the server and debugging endpoints.
 
-Coverage includes the same order across all four roles; search and filters; quantity bounds and steppers; dialog keyboard behavior; mobile planning tabs; vehicle selection and capacity rejection; reverse loading; issue resolution; offline reload; deferred delivery stops and return visits; receipt validation; Store delivery confirmation; runtime errors; and layout overflow across **360, 390, 430, 768, 834, 1024, 1280 and 1440px**. Active Delivery checks verify that navigation, primary actions and toast messages do not overlap at 360–430px.
+Coverage includes login validation, all four credentials, role/hash gating, sign out, session refresh, state-preserving demo switching, login layouts at 1440/1024/430/390/360px, and the same order across all four roles; search and filters; quantity bounds and steppers; dialog keyboard behavior; mobile planning tabs; vehicle selection and capacity rejection; reverse loading; issue resolution; offline reload; deferred delivery stops and return visits; receipt validation; Store delivery confirmation; runtime errors; and layout overflow across **360, 390, 430, 768, 834, 1024, 1280 and 1440px**. Active Delivery checks verify that navigation, primary actions and toast messages do not overlap at 360–430px.
 
 Full-page screenshots are written to ignored `artifacts/`, including Store 1440/430/390, Dispatch 1440/1024/390, Warehouse 834/768 and Delivery 430/390/360. Additional captures show planning tabs, delivery exceptions and completed receipts. Mobile `-viewport` images preserve the actual visible screen for checking fixed controls.
+
+Detailed P3 steps and verification: [Role-separated access walkthrough](docs/walkthroughs/P3-role-separated-access-walkthrough.md).

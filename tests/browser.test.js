@@ -38,8 +38,8 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     await run("state.ready=true;state.confirmed=true;state.started=true;assigned()[0].status='Delivered';assigned()[0].deliveredAt='09:25';assigned()[0].recipient='Store manager';assigned()[1].status='In transit';render()");
     assert.match(await mainText(),/Partially completed/);
     assert.match(await mainText(),/1 of 2 stops delivered/);
-    assert.equal(await run("document.querySelector('.capacity-track').getAttribute('aria-valuenow')"),'270');
-    assert.match(await run("document.querySelector('.dispatch-pulse').innerText"),/930 kg free/);
+    assert.equal(await run("document.querySelector('.capacity-track').getAttribute('aria-valuenow')"),'362');
+    assert.match(await run("document.querySelector('.dispatch-pulse').innerText"),/2\.9 \/ 26\.4 m³/);
     assert.doesNotMatch(await mainText(),/Ready for the road|Ready to dispatch/);
     await screenshot('dispatch-partial-1440');
     await run("assigned()[1].issue='Store closed';assigned()[1].status='Issue';assigned()[1].deferred=true;render()");
@@ -91,7 +91,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     await input('#product-search', 'no-matching-product');
     assert.equal(await run("document.querySelectorAll('[data-qty]').length"), 0);
     assert.match(await mainText(), /no .*products|no .*matches|no .*results/i);
-    await input('#product-search', 'Anchor');
+    await input('#product-search', 'Fresh milk');
     assert.equal(await run("document.querySelectorAll('[data-qty]').length"), 1);
     await input('#product-search', '');
     await input('#stock-filter', 'attention', 'change');
@@ -126,7 +126,9 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     await click('[data-action="place-order"]');
     assert.deepEqual((await order()).items, [12, 10, 8, 6, 4]);
     assert.equal((await order()).cartons, 40);
-    assert.equal((await order()).weight, 280);
+    assert.equal((await order()).weight, 376);
+    assert.equal((await order()).tempRequirement, 'chilled');
+    assert.ok((await order()).volume > 0);
     assert.match(await run("document.querySelector('#dialog').innerText"), /ORD-2847/);
   });
 
@@ -138,25 +140,25 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     assert.equal(await run("document.querySelector('[data-action=select-order][data-id=ORD-2847]').getAttribute('aria-pressed')"), 'true');
     await screenshot('dispatch-new-order');
     await click('[data-action="fleet"]');
-    await click('[data-action="select-vehicle"][data-id="TRK-218"]');
-    assert.equal(await run('activeVehicle().capacity'), 1500);
-    assert.equal(await run('assigned().every(order => order.vehicle === "TRK-218")'), true);
+    await click('[data-action="select-vehicle"][data-id="VEH036"]');
+    assert.equal(await run('activeVehicle().capacity'), 1040);
+    assert.equal(await run('assigned().every(order => order.vehicle === "VEH036")'), true);
     await click('[data-action="fleet"]');
-    await click('[data-action="select-vehicle"][data-id="TRK-214"]');
+    await click('[data-action="select-vehicle"][data-id="VEH003"]');
     assert.equal(await run('activeVehicle().driver'), 'Amal Perera');
     // Exercise maximum-capacity failure without changing the normal demo scenario.
-    await run("state.orders.push({...state.orders[0], id:'ORD-CAPACITY', route:null, status:'Pending', weight:1500, cartons:150, items:[150,0,0,0,0]}); render()");
+    await run("state.orders.push({...state.orders[0], id:'ORD-CAPACITY', route:null, status:'Pending', weight:6000, volume:30, cartons:150, items:[150,0,0,0,0]}); render()");
     const capacityButtonDisabled = await run("document.querySelector('[data-action=assign][data-id=ORD-CAPACITY]')?.disabled");
     if (!capacityButtonDisabled) await click('[data-action="assign"][data-id="ORD-CAPACITY"]');
     assert.equal(await run("state.orders.find(o=>o.id==='ORD-CAPACITY').route"), null, 'Over-capacity orders stay unassigned.');
-    assert.match(await run("document.querySelector('#dialog').innerText"), /over the vehicle limit|capacity/i);
+    assert.match(await run("document.querySelector('#dialog').innerText"), /over weight limit|constraint/i);
     await click('#dialog [data-action="close"]');
     await run("state.orders=state.orders.filter(o=>o.id!=='ORD-CAPACITY'); render()");
     await click('[data-action="assign"][data-id="ORD-2847"]');
     assert.equal((await order()).route, 'R-07');
     assert.equal((await order()).cartons, 40);
     await click('[data-action="confirm-dispatch"]');
-    assert.match(await run("document.querySelector('#dialog').innerText"), /TRK-214/);
+    assert.match(await run("document.querySelector('#dialog').innerText"), /VEH003/);
     await click('[data-action="release"]');
     assert.equal(await run('state.confirmed'), true);
     assert.equal((await order()).status, 'Ready to load');
@@ -176,7 +178,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     await input('#resolution', 'Located and counted the missing cartons.');
     await click('[data-action="resolved"]');
     await click('[data-action="loaded"]:not([disabled])');
-    assert.equal((await order()).loaded, true, 'The final delivery stop loads first.');
+    assert.equal(await run('assigned().at(-1).loaded'), true, 'The final delivery stop loads first.');
     const pendingCount = await run('state.pending.length');
     assert.ok(pendingCount > 0);
     await capture('loader', 834, 1112);
@@ -186,7 +188,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     await waitFor("typeof render === 'function' && document.querySelector('#main')");
     assert.equal(await run('state.offline'), true);
     assert.equal(await run('state.pending.length'), pendingCount);
-    assert.equal((await order()).loaded, true);
+    assert.equal(await run('assigned().at(-1).loaded'), true);
     await viewport(834, 1112);
     for (let count = 0; await run('assigned().some(order => !order.loaded)'); count++) {
       assert.ok(count < 10, 'Loading must make progress.');
@@ -346,7 +348,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
       await waitFor("document.activeElement?.dataset.id==='ORD-2848'");
       assert.equal(await run('dispatchRouteState().key'),'completed');
       assert.equal(await run("state.orders.find(o=>o.id==='ORD-2848').nextRun"),true);
-      assert.match(await mainText(),/Queued for the next run/);
+      assert.match(await mainText(),/Next run · window pending/);
     } finally {
       await run(`state=JSON.parse(${JSON.stringify(completedState)});save();pendingDispatchOrderId=null;revealedDispatchOrderId=null;role='dispatch';render()`);
     }
@@ -387,13 +389,64 @@ test('Relay: connected order, planning constraints, field exceptions and respons
       await run("Element.prototype.scrollIntoView=qaOriginalScroll;delete window.qaOriginalScroll;delete window.qaScrollOptions;role='loader';state.ready=false;assigned().forEach(o=>o.loaded=false);assigned()[1].issue='Damaged carton: '+ 'X'.repeat(200);assigned()[1].issueType='Damaged cartons';render()");
       const note=await run("(() => {const el=document.querySelector('.shipment-exception p');const card=el.closest('.shipment').getBoundingClientRect();const r=el.getBoundingClientRect();return {right:r.right,cardRight:card.right,client:el.clientWidth,scroll:el.scrollWidth}})()");
       assert.ok(note.right<=note.cardRight && note.scroll<=note.client+1,'Long exception notes wrap inside the shipment.');
-      await run("role='store';tab='orders';assigned()[0].store='Keells · Nugegoda';assigned()[0].area='Nugegoda';assigned()[0].status='Delivered';assigned()[0].recipient='A'.repeat(80);assigned()[0].deliveredAt='10:25';render()");
+      await run("role='store';tab='orders';assigned()[0].outletId='OUT006';assigned()[0].store='Waypoint Fresh · Colombo 06';assigned()[0].area='Colombo 06';assigned()[0].status='Delivered';assigned()[0].recipient='A'.repeat(80);assigned()[0].deliveredAt='06:25';render()");
       await click('[data-action="order-detail"]');
       assert.equal(await run("document.querySelector('.dialog-body').scrollWidth<=document.querySelector('.dialog-body').clientWidth"),true,'Long recipient names fit the receipt.');
       await key('Escape');
     } finally {
       await run(`if(window.qaOriginalScroll)Element.prototype.scrollIntoView=qaOriginalScroll;document.querySelector('#dialog').close();state=JSON.parse(${JSON.stringify(savedState)});role='dispatch';fieldRouteOpen=false;render()`);
       await send('Emulation.setEmulatedMedia',{features:[]});
+    }
+  });
+
+  await t.test('Designathon evidence and named degradation scenario are available in the prototype', async () => {
+    const savedState = await run('JSON.stringify(state)');
+    try {
+      await viewport(1440, 1000);
+      await run("caseStudyOpen=true;role='dispatch';render();window.scrollTo(0,0)");
+      const caseText = await mainText();
+      assert.equal(await run("document.querySelectorAll('.persona-card').length"), 4);
+      assert.equal(await run("document.querySelectorAll('.screen-flow>li').length"), 4);
+      assert.match(caseText, /Connection lost in hill country/);
+      assert.match(caseText, /Explainability before invisible automation/);
+      assert.match(caseText, /AI tool disclosure/i);
+      await screenshot('case-study-1440');
+      await viewport(390, 844);
+      await screenshot('case-study-390');
+      await click('[data-action="show-degradation"]');
+      assert.equal(await run('state.offline'), true);
+      assert.equal(await run('state.pending.length'), 3);
+      assert.match(await mainText(), /Degradation: connection lost/);
+      await screenshot('delivery-degradation-390', false);
+    } finally {
+      await run(`state=JSON.parse(${JSON.stringify(savedState)});save();caseStudyOpen=false;role='dispatch';location.hash='dispatch';render()`);
+    }
+  });
+
+  await t.test('source-aligned constraints, explainable deferral and capacity outlook are interactive', async () => {
+    const savedState = await run('JSON.stringify(state)');
+    try {
+      await viewport(1440, 1000);
+      await run("state=seed();caseStudyOpen=false;role='dispatch';dispatchPanel='queue';render()");
+      assert.equal(await run("document.querySelectorAll('.constraint-check').length"), 6);
+      assert.equal(await run("planChecks().every(check=>check[2])"), true);
+      await click('[data-action="assign"][data-id="ORD-2846"]');
+      assert.match(await run("document.querySelector('#dialog').innerText"), /van-only outlet requires a van/);
+      await key('Escape');
+      await click('[data-action="defer-order"][data-id="ORD-2843"]');
+      await click('[data-action="confirm-defer"]');
+      assert.equal(await run("document.querySelector('#dialog').open"), true, 'A reason and impact are required.');
+      await input('#deferral-reason', 'Delivery window cannot be met', 'change');
+      await input('#deferral-note', 'Protect this repeat skip on the first compatible trip tomorrow.');
+      await click('[data-action="confirm-defer"]');
+      assert.equal(await run("state.orders.find(o=>o.id==='ORD-2843').decision"), 'deferred');
+      assert.match(await mainText(), /1 deferred/);
+      await click('[data-action="capacity-outlook"]');
+      assert.match(await run("document.querySelector('#dialog').innerText"), /10-week demand outlook/i);
+      assert.match(await run("document.querySelector('#dialog').innerText"), /reefer vehicles and drivers on standby/);
+      await key('Escape');
+    } finally {
+      await run(`state=JSON.parse(${JSON.stringify(savedState)});save();caseStudyOpen=false;role='dispatch';render()`);
     }
   });
 

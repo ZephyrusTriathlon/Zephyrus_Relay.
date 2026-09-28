@@ -1,5 +1,6 @@
 node_modules/
 .browser-profile/
 .browser-qa/
+.browser-qa-*/
 artifacts/
 test-results/

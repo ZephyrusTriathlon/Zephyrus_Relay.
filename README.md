@@ -1,11 +1,13 @@
-# Relay
+# Relay — Tech-Triathlon 2026 Designathon
 
-A connected distribution prototype for Colombo-area replenishment: Store → Plan → Load → Deliver → Complete. Built with semantic HTML, CSS and vanilla JavaScript. No runtime dependencies, build step, authentication or backend.
+Relay is a connected delivery-operations prototype for the fictional Waypoint Group: Order → Plan → Load → Deliver → Confirm receipt. It demonstrates the four official user roles and uses the supplied synthetic network conventions for outlets, vehicles, depots, access, temperature, capacity and delivery windows.
+
+Open **Design case study** in the prototype for the four personas, screen rationales, named degradation scenario, scope and tradeoff explanation, style guide, and AI tool disclosure.
 
 ## Run
 
 ```powershell
-cd D:\tech_triathlon\designathon-ui
+cd "C:\BACKUP 4TB\Tech-Triathlon\tech-triathlon-designathon-ui"
 node server.js
 ```
 
@@ -13,10 +15,10 @@ Open **http://localhost:4173**. `npm start` runs the same server. Role deep link
 
 ## A complete judging walkthrough
 
-1. **Store:** choose **Use recommended quantities**, adjust cartons with the steppers, and **Review order → Place order**. The first replenishment creates **ORD-2847**, 40 cartons / 280 kg for **Keells · Nugegoda**. Search by product or SKU, or filter by stock health.
-2. **Dispatch:** assign **ORD-2847** to **R-07 / Colombo East**, review its delivery window and capacity, then **Confirm plan → Confirm & release**. The default vehicle is **TRK-214**, driven by **Amal Perera**. **Change** opens the fleet selector; the chosen vehicle, driver and bay follow the order into the warehouse and field interfaces. Orders that exceed capacity remain unassigned with an explanation.
+1. **Store:** choose **Use recommended quantities**, adjust cartons with the steppers, and **Review order → Place order**. The replenishment creates **ORD-2847** for **Waypoint Fresh · OUT006**, shows the official 16:00 cutoff, and carries weight, volume and temperature needs into planning.
+2. **Dispatch:** assign **ORD-2847** to **R-07 / Fresh / Colombo**, review all six feasibility groups, then **Confirm plan → Confirm & release**. The default vehicle is the supplied-fleet-aligned **VEH003** reefer truck. Try the van-only OUT001 order to see access validation, record a reasoned deferral, or open the 10-week capacity outlook.
 3. **Warehouse:** load the last delivery stop first, following the numbered manifest. Expand a shipment to check its products. Try **Missing / issue**, select a problem, then resolve it with a note. **Confirm loaded** advances the sequence; **Complete loading** becomes available once every shipment is checked.
-4. **Delivery:** **Start route**, navigate or open the sample contact details, record arrival, then verify the delivery. A receipt requires the full carton count, the verification checkbox, a recipient and delivery time. Confirm each stop to complete the route.
+4. **Delivery:** **Start route**, navigate or open the sample contact details, record arrival, then verify the delivery. A receipt requires the full carton count, the verification checkbox, a recipient and delivery time. Simulate lost connectivity to see the named degradation and recovery state.
 5. **Store → Order tracking:** the same order now shows **Delivered**, its recipient, verified cartons and delivery time. Received cartons update the store stock position and replenishment suggestions. The activity control records the shared handoffs.
 
 The sidebar or mobile bottom navigation switches demo personas at any point. **Demo guide** explains the journey and offers a confirmed reset. Reset affects Relay’s local data only.
@@ -24,7 +26,9 @@ The sidebar or mobile bottom navigation switches demo personas at any point. **D
 ## Useful states to demonstrate
 
 - **Delivery exceptions:** report Store closed, Recipient unavailable, Damaged goods, Partial delivery, Delivery refused or Access delayed. **Save & return later** holds the order open and advances to another stop. Outstanding stops remain visible; a return visit requires a resolution note and a new arrival. A route with deferred stops is never reported as complete.
-- **Offline simulation:** use the connectivity control in Warehouse or Delivery. Loading, issue resolutions and receipts persist through refresh, with last-sync and pending-update feedback. Reconnecting clears the simulated queue. Dispatch planning is unavailable while this simulation is active.
+- **Named degradation — Connection lost in hill country:** use the connectivity control in Warehouse or Delivery, or launch it from the Design case study. Loading, issue resolutions and receipts persist through refresh, with last-sync and pending-update feedback. Reconnecting reconciles the simulated queue. Dispatch route changes are unavailable while offline.
+- **Planning constraints:** weight, volume, refrigeration, van-only access, depot, fuel quota, trip limit and Fresh’s pre-dawn time budget are visible. Incompatible vehicles and assignments are blocked with an explanation.
+- **Explainable deferral:** select an unassigned order, choose **Defer**, record the reason and impact, and see the decision shared with the store.
 - **Validation and empty states:** clear search results, try an empty order, exceed vehicle capacity, leave resolution details blank, or enter an incorrect proof-of-delivery count. Each state explains the next useful action.
 - **Responsive planning:** desktop exposes queue, route and vehicle together. Tablet and mobile use **Orders / Route / Vehicle** tabs; arrow keys, Home and End also navigate the tabs.
 
@@ -32,22 +36,22 @@ The sidebar or mobile bottom navigation switches demo personas at any point. **D
 
 The four workspaces share warm neutral surfaces, deep green actions, restrained status colors, readable operational type and a compact order lifecycle. Mobile Store uses product rows recomposed as touch-friendly cards and an order summary above navigation. Warehouse prioritizes loading sequence on tablets. Delivery uses a single next-stop view, an optional route overview and a primary action above the safe-area-aware navigation. Toasts occupy a separate space above the action bar.
 
-Interface content is real DOM text, grouped using Grid and Flexbox. Small route and vehicle illustrations use SVG; the application itself is not a flattened image or canvas. Shared tokens and patterns live in `styles.css`; persona styling is in `dispatch.css`, `store.css` and `field.css`. `script.js` and `workspace.js` manage the shared state and shell; the corresponding persona JavaScript files contain their views and interactions. This structure supports later Figma capture and component reconstruction.
+Interface content is real DOM text, grouped using Grid and Flexbox. Small route and vehicle illustrations use SVG; the application itself is not a flattened image or canvas. Shared tokens and patterns live in `styles.css`; persona styling is in `dispatch.css`, `store.css`, `field.css` and `case-study.css`. `script.js` and `workspace.js` manage the shared state and shell; the corresponding view JavaScript files contain their screens and interactions. The system-font stack keeps the prototype self-contained.
 
 Dialogs have accessible names, keyboard focus containment and focus restoration. Controls provide visible focus, labeled inputs and status text. Touch targets are enlarged in the field interfaces and reduced-motion preferences are respected.
 
 ## Prototype boundaries
 
-All operational records, stock cover, availability, suggested quantities, routes, ETAs, contact details and synchronization are simulated. Data persists in this browser’s `relay-v1` localStorage entry; there is no server data or cross-device synchronization. Offline mode demonstrates the experience, not an actual network cache or service worker.
+All operational records, stock cover, availability, suggestions, routes, ETAs, contacts, forecast values and synchronization are simulated. The prototype uses official field names and representative records, but it does not load the confidential CSV files into the browser. Data persists in this browser’s `relay-v1` localStorage entry; there is no backend or cross-device synchronization. Offline mode demonstrates the experience, not an actual service worker.
 
-One **R-07** route is editable and can be released during each demo. **R-12** and **R-15** are scheduled-run previews. Fleet selection offers three realistic mock vehicles. Suggestions and schematic maps illustrate planning decisions; they do not optimize routes. New orders placed after release remain queued until a demo reset. Navigation opens an external map search. Partial deliveries remain outstanding for reconciliation; they do not generate a completed receipt. Google Fonts has a system-font fallback.
+One **R-07** Fresh trip is editable and can be released during each demo. **R-12 Style** and **R-15 Tech** are scope previews. Fleet selection uses three representative available vehicles from the supplied Peliyagoda fleet. Suggestions, forecast values, time budgets and schematic maps illustrate decisions; they do not claim optimization or Datathon predictions. New orders placed after release remain queued until a demo reset. Navigation opens an external map search. Partial deliveries remain outstanding for reconciliation; they do not generate a completed receipt.
 
 ## Verification
 
 With Node 24, the local server running and a separate Chrome debugging browser, run:
 
 ```powershell
-Start-Process -FilePath 'C:\Program Files\Google\Chrome\Application\chrome.exe' -ArgumentList '--headless=new','--disable-gpu','--remote-debugging-port=9222','--user-data-dir=D:\tech_triathlon\designathon-ui\.browser-qa','--no-first-run','about:blank' -WindowStyle Hidden
+Start-Process -FilePath 'C:\Program Files\Google\Chrome\Application\chrome.exe' -ArgumentList '--headless=new','--disable-gpu','--remote-debugging-port=9222','--user-data-dir=C:\BACKUP 4TB\Tech-Triathlon\tech-triathlon-designathon-ui\.browser-qa','--no-first-run','about:blank' -WindowStyle Hidden
 node --test tests/browser.test.js
 ```
 

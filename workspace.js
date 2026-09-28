@@ -17,23 +17,24 @@ function flow() {
 }
 
 function offlineBanner() {
-  return state.offline ? `<section class="offline-banner" aria-label="Connection status">${icon('wifi')}<div><b>Offline · ${state.pending.length} update${state.pending.length === 1 ? '' : 's'} waiting to sync</b><small>Last synced ${state.lastSync}. Loading and receipts stay available. Route changes require a connection.</small></div>${['loader','delivery'].includes(role)?'':'<button class="mini-btn" data-action="offline">Reconnect</button>'}</section>` : '';
+  const field=['loader','delivery'].includes(role);
+  return state.offline ? `<section class="offline-banner" aria-label="Degradation scenario: connection lost">${icon('wifi')}<div><b>${field?'Degradation: connection lost':'Offline'} · ${state.pending.length} update${state.pending.length === 1 ? '' : 's'} waiting to sync</b><small>Last synced ${state.lastSync}. Loading, exceptions and receipts stay usable on this device. Records reconcile when coverage returns; route changes remain protected.</small></div>${field?'':'<button class="mini-btn" data-action="offline">Reconnect</button>'}</section>` : '';
 }
 
 function render() {
   const r = role === 'delivery' ? {...roles.delivery, user:activeVehicle().driver, initials:activeVehicle().driver.split(' ').map(name=>name[0]).join('')} : roles[role];
-  document.body.dataset.role = role;
+  document.body.dataset.role = caseStudyOpen?'case-study':role;
   document.body.dataset.hasAction = String((role === 'store' && tab === 'replenishment') || (role === 'delivery' && state.ready && assigned().some(o => o.status !== 'Delivered')));
   document.querySelector('#app').innerHTML = `
     <aside class="sidebar">
       <a class="brand" href="#dispatch" aria-label="Relay dispatch home"><span class="brand-mark">⇄</span><span>relay<span class="brand-dot">.</span></span></a>
       <div class="workspace-label">Demo · switch persona</div>
       <nav class="nav" aria-label="Switch demo persona">${Object.entries(roles).map(([key,v]) => `<button data-role="${key}" class="${role === key ? 'active' : ''}" ${role === key ? 'aria-current="page"' : ''} title="${v.name}">${icon(v.icon)}<span>${key === 'loader' ? 'Warehouse' : v.short}</span>${key === 'dispatch' ? `<span class="count">${state.orders.filter(o => !o.route).length}</span>` : ''}</button>`).join('')}</nav>
-      <div class="sidebar-bottom"><button class="btn ghost wide" data-action="guide">${icon('help')} Demo guide</button><div class="demo-note"><b>Good things, in motion.</b><span>Peliyagoda distribution centre</span><span>Colombo, Sri Lanka</span><span class="demo-label">INTERACTIVE PROTOTYPE</span></div><div class="profile"><span class="avatar">${r.initials}</span><div class="stack"><b>${r.user}</b><small>${r.title}</small></div></div></div>
+      <div class="sidebar-bottom"><button class="btn ghost wide" data-action="case-study">${icon('help')} Design case study</button><div class="demo-note"><b>Waypoint Group delivery network</b><span>Peliyagoda distribution centre</span><span>Colombo, Sri Lanka</span><span class="demo-label">DESIGNATHON PROTOTYPE</span></div><div class="profile"><span class="avatar">${r.initials}</span><div class="stack"><b>${r.user}</b><small>${r.title}</small></div></div></div>
     </aside>
     <div class="shell">
-      <header class="topbar"><div class="breadcrumb"><span>Operations</span>${icon('chevron')}<b>${r.name}</b></div><div class="row"><span class="online"><span class="dot ${state.offline?'offline':''}"></span>${state.offline ? 'Offline · saved locally' : 'Demo workspace'}</span><button class="btn ghost icon-btn" data-action="guide" aria-label="Open demo guide">${icon('help')}</button><button class="btn ghost icon-btn" data-action="activity" aria-label="Open activity feed">${icon('bell')}${state.pending.length?'<span class="notification-dot"></span>':''}</button><span class="avatar">${r.initials}</span></div></header>
-      <main id="main" tabindex="-1" class="view-${role}">${role === 'dispatch' ? dispatchView() : role === 'store' ? storeView() : role === 'loader' ? loaderView() : deliveryView()}</main>
+      <header class="topbar"><div class="breadcrumb"><span>${caseStudyOpen?'Submission':'Operations'}</span>${icon('chevron')}<b>${caseStudyOpen?'Design case study':r.name}</b></div><div class="row"><span class="online"><span class="dot ${state.offline?'offline':''}"></span>${state.offline ? 'Offline · saved locally' : 'Source-aligned prototype'}</span><button class="btn ghost icon-btn" data-action="case-study" aria-label="Open design case study">${icon('help')}</button><button class="btn ghost icon-btn" data-action="activity" aria-label="Open activity feed">${icon('bell')}${state.pending.length?'<span class="notification-dot"></span>':''}</button><span class="avatar">${r.initials}</span></div></header>
+      <main id="main" tabindex="-1" class="view-${caseStudyOpen?'case-study':role}">${caseStudyOpen?caseStudyView():role === 'dispatch' ? dispatchView() : role === 'store' ? storeView() : role === 'loader' ? loaderView() : deliveryView()}</main>
     </div>`;
   bindInputs();
   if (typeof bindStoreInputs === 'function') bindStoreInputs();

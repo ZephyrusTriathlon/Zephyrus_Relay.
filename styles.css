@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;550;600;650;700&display=swap');
-
 /* Relay foundations: 4/8px spacing, restrained surfaces, readable operational type. */
 :root {
   --bg:#f6f7f3; --surface:#fff; --text:#26332c; --muted:#66716a;
@@ -8,7 +6,7 @@
   --radius:8px; --space:8px; --control:44px;
   --shadow:0 16px 48px #2035281a;
   --nav-height:72px; --action-height:80px;
-  font-family:'DM Sans',Arial,sans-serif; color:var(--text); font-size:14px; font-synthesis:none;
+  font-family:'Segoe UI',Arial,sans-serif; color:var(--text); font-size:14px; font-synthesis:none;
 }
 * { box-sizing:border-box; }
 body { margin:0; background:var(--bg); line-height:1.5; }

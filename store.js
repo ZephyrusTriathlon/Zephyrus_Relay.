@@ -2,7 +2,7 @@
 let stockFilter = 'all';
 
 function storeOwnOrders() {
-  return state.orders.filter(o => o.area === 'Nugegoda' && o.store.startsWith('Keells'));
+  return state.orders.filter(o => o.outletId === 'OUT006');
 }
 
 function storeStock(p, index) {
@@ -19,7 +19,7 @@ function storeStock(p, index) {
 }
 
 function storeWindowLabel(o) {
-  return o?.nextRun ? 'Next run · window pending' : `Today, ${o?.window || '10:00 – 11:30'}`;
+  return o?.nextRun ? 'Next run · window pending' : `Tomorrow, ${o?.window || '03:00 – 08:00'}`;
 }
 
 function storeFilteredProducts() {
@@ -36,13 +36,13 @@ function storeView() {
   const attention = products.filter((p, i) => storeStock(p, i).health !== 'Healthy').length;
   const vehicle = latest?.route ? vehicleForOrder(latest) : null;
   const delivered = latest?.status === 'Delivered';
-  const deliveryTitle = latest ? `${latest.id} · ${latest.nextRun ? 'Queued for next run' : latest.status}` : state.confirmed ? 'Morning dispatch has closed' : 'Today, 10:00 – 11:30';
-  const deliveryNote = !latest ? state.confirmed ? 'New orders join the next run. The delivery window is not yet confirmed.' : 'Order by 08:50 · Morning replenishment' : delivered ? `${latest.cartons} cartons received by ${esc(latest.recipient || 'the store team')} at ${esc(latest.deliveredAt || 'the recorded time')}.` : latest.issue ? 'An exception needs attention. Your team is reviewing the next step.' : latest.nextRun ? 'Saved for the next dispatch run. Your delivery window is awaiting confirmation.' : latest.route ? `${latest.route} · ${vehicle.id} · Requested window ${latest.window}` : 'Your order is with dispatch. We’ll show the route here once assigned.';
-  return `${heading('Keells · Nugegoda', 'Keep your shelves ready.', 'A clear view of your stock, replenishment and next delivery.')}
+  const deliveryTitle = latest ? `${latest.id} · ${latest.nextRun ? 'Queued for next run' : latest.status}` : state.confirmed ? 'Current dispatch has closed' : 'Tomorrow, 03:00 – 08:00';
+  const deliveryNote = !latest ? state.confirmed ? 'New orders join the next run. The delivery window is not yet confirmed.' : 'Order by 16:00 · Next-day replenishment' : delivered ? `${latest.cartons} cartons received by ${esc(latest.recipient || 'the store team')} at ${esc(latest.deliveredAt || 'the recorded time')}.` : latest.deferralReason ? `Deferred with reason: ${esc(latest.deferralReason)}` : latest.issue ? 'An exception needs attention. Your team is reviewing the next step.' : latest.nextRun ? 'Saved for the next dispatch run. Your delivery window is awaiting confirmation.' : latest.route ? `${latest.route} · ${vehicle.id} · Requested window ${latest.window}` : 'Your order is with dispatch. We’ll show the route here once assigned.';
+  return `${heading('Waypoint Fresh · OUT006 · Colombo', 'Keep your shelves ready.', 'Place next-day orders before 16:00 and follow every handoff through receipt.')}
     ${flow()}${offlineBanner()}
     <section class="store-overview" aria-label="Store overview">
       <div class="store-stock-signal"><span class="store-signal-icon ${attention ? 'attention' : ''}">${icon(attention ? 'warning' : 'check')}</span><div><b>${attention ? `${attention} product${attention === 1 ? '' : 's'} need${attention === 1 ? 's' : ''} attention` : 'Your essentials are well stocked'}</b><p>${low ? `${low} running low · about 2 days of stock remaining` : attention ? 'Replenish soon to cover the coming week' : 'Enough stock for the coming week'}</p></div></div>
-      <div class="store-delivery-signal"><div><span class="store-meta">${latest ? delivered ? 'Latest delivery' : 'Latest replenishment' : 'Next delivery window'}</span><h2>${deliveryTitle}</h2><p>${deliveryNote}</p></div>${latest ? `<button class="btn ghost store-track-button" data-action="store-orders">Track order ${icon('arrow')}</button>` : badge(state.confirmed ? 'Next run only' : 'Orders open')}</div>
+      <div class="store-delivery-signal"><div><span class="store-meta">${latest ? delivered ? 'Latest delivery' : 'Latest replenishment' : 'Next delivery window'}</span><h2>${deliveryTitle}</h2><p>${deliveryNote}</p></div>${latest ? `<button class="btn ghost store-track-button" data-action="store-orders">Track order ${icon('arrow')}</button>` : badge(state.confirmed ? 'Next run only' : 'Open until 16:00')}</div>
     </section>
     <div class="toolbar store-toolbar"><div class="tabs" aria-label="Store views"><button data-action="store-replenish" class="${tab === 'replenishment' ? 'active' : ''}" aria-current="${tab === 'replenishment' ? 'page' : 'false'}">Replenishment</button><button data-action="store-orders" class="${tab === 'orders' ? 'active' : ''}" aria-current="${tab === 'orders' ? 'page' : 'false'}">Order tracking <span class="badge">${mine.length}</span></button></div><span class="store-updated">Stock snapshot · today, 08:30</span></div>
     ${tab === 'orders' ? storeOrders(mine) : `<div class="store-layout">
@@ -53,7 +53,7 @@ function storeView() {
         <div class="store-inventory-footer"><span id="product-result" aria-live="polite">${storeFilteredProducts().length} of ${products.length} products</span><span class="store-availability">${icon('check')} Available at Peliyagoda</span></div>
         <div class="store-rationale"><span>${icon('help')}</span><div><b>Why these quantities?</b><p>Suggestions cover around 7 days of demand, based on recent sales, current stock and cartons already on order. Adjust for promotions or busier days.</p><small>Demand and availability are simulated for this demo.</small></div></div>
       </section>
-      <aside class="summary store-summary" aria-labelledby="basket-title"><div class="store-summary-intro"><span class="eyebrow">Draft replenishment</span><h2 id="basket-title">Your order</h2><p>Keells · Nugegoda<br><span>138, High Level Road</span></p></div><div id="basket-summary">${basketSummary()}</div></aside>
+      <aside class="summary store-summary" aria-labelledby="basket-title"><div class="store-summary-intro"><span class="eyebrow">Draft replenishment</span><h2 id="basket-title">Your order</h2><p>Waypoint Fresh · OUT006<br><span>Colombo · Peliyagoda depot</span></p></div><div id="basket-summary">${basketSummary()}</div></aside>
     </div>`}`;
 }
 
@@ -72,12 +72,13 @@ function basketSummary() {
   const weight = quantities.reduce((n, q, i) => n + q * products[i].weight, 0);
   const lines = quantities.filter(Boolean).length;
   return `<div class="store-basket-totals"><div class="big">${qty}<span>cartons</span></div><p>${lines} product${lines !== 1 ? 's' : ''} <span>·</span> ${weight} kg</p></div>
-    <div class="store-basket-details"><div class="detail-row"><span>Requested delivery</span><b>${state.confirmed ? 'Next run' : 'Today'}</b></div><div class="detail-row"><span>Delivery window</span><b>${state.confirmed ? 'To be confirmed' : '10:00 – 11:30'}</b></div><div class="detail-row"><span>Warehouse</span><b>Peliyagoda</b></div></div>
+    <div class="store-basket-details"><div class="detail-row"><span>Requested delivery</span><b>${state.confirmed ? 'Next run' : 'Tomorrow'}</b></div><div class="detail-row"><span>Delivery window</span><b>${state.confirmed ? 'To be confirmed' : '03:00 – 08:00'}</b></div><div class="detail-row"><span>Order cutoff</span><b>16:00 today</b></div><div class="detail-row"><span>Warehouse</span><b>Peliyagoda</b></div></div>
     <div class="store-desktop-review"><button class="btn primary wide" data-action="create-order" ${!qty ? 'disabled' : ''}>Review order ${icon('arrow')}</button><p class="helper">${state.confirmed ? 'Morning dispatch is closed. New orders join the next run.' : qty ? 'Review quantities before you place your order.' : 'Add quantities or use our suggestions to get started.'}</p>${qty ? '<button class="mini-btn store-clear" data-action="store-clear-basket">Clear quantities</button>' : ''}</div>
     <div class="store-mobile-action" aria-label="Order summary"><div class="store-mobile-total"><b>${qty} <span>cartons</span></b><small>${lines} products · ${weight} kg</small></div><button class="btn primary" data-action="create-order" ${!qty ? 'disabled' : ''}>Review order ${icon('arrow')}</button></div>`;
 }
 
 function storeStatusDescription(o) {
+  if (o.deferralReason) return `Moved to the next run: ${o.deferralReason}`;
   if (o.issue) return 'Your team is working through an exception. Details are recorded below.';
   if (o.status === 'Delivered') return 'Delivery complete. Your stock position now includes the received cartons.';
   if (o.arrived) return 'The driver has arrived. Your receiving team can verify the delivery.';
@@ -158,23 +159,24 @@ function handleStoreAction(action, button, o) {
     const count = quantities.reduce((a, b) => a + b, 0);
     if (!count) return true;
     const weight = quantities.reduce((sum, q, i) => sum + q * products[i].weight, 0);
-    openDialog(`<div class="eyebrow">Review replenishment</div><h2>Everything your store needs.</h2><p>Keells · Nugegoda<br>138, High Level Road, Nugegoda</p><div class="store-review-window">${icon('clock')}<div><b>${state.confirmed ? 'Next dispatch run' : 'Today, 10:00 – 11:30'}</b><small>${state.confirmed ? 'Morning run closed · delivery window awaiting confirmation' : 'Requested window · confirmed after route planning'}</small></div></div><div class="store-review-lines">${products.map((p, i) => quantities[i] ? `<div class="store-review-line"><div><b>${p.name}</b><small>${p.size}</small></div><strong>${quantities[i]} <span>ctn</span></strong></div>` : '').join('')}</div><div class="store-review-total"><b>${count} cartons</b><span>${quantities.filter(Boolean).length} products · ${weight} kg</span></div>${state.offline ? '<p class="helper">Your order will be saved on this device and queued until you reconnect.</p>' : ''}<div class="dialog-actions"><button class="btn" data-action="close">Keep editing</button><button class="btn primary" data-action="place-order">Place order ${icon('arrow')}</button></div>`);
+    const volume=quantities.reduce((sum,q,i)=>sum+q*products[i].volume,0);
+    openDialog(`<div class="eyebrow">Review replenishment</div><h2>Everything OUT006 needs.</h2><p>Waypoint Fresh · Colombo<br>Served from Peliyagoda</p><div class="store-review-window">${icon('clock')}<div><b>${state.confirmed ? 'Next dispatch run' : 'Tomorrow, 03:00 – 08:00'}</b><small>${state.confirmed ? 'Current plan released · delivery window awaiting confirmation' : 'Order closes at 16:00 · window confirmed after planning'}</small></div></div><div class="store-review-lines">${products.map((p, i) => quantities[i] ? `<div class="store-review-line"><div><b>${p.name}</b><small>${p.size} · ${p.temp}</small></div><strong>${quantities[i]} <span>ctn</span></strong></div>` : '').join('')}</div><div class="store-review-total"><b>${count} cartons</b><span>${quantities.filter(Boolean).length} products · ${weight} kg · ${volume.toFixed(2)} m³</span></div>${state.offline ? '<p class="helper">Your order will be saved on this device and queued until you reconnect.</p>' : ''}<div class="dialog-actions"><button class="btn" data-action="close">Keep editing</button><button class="btn primary" data-action="place-order">Place order ${icon('arrow')}</button></div>`);
     return true;
   }
   if (action === 'place-order' && state.confirmed) {
     const count = quantities.reduce((sum, q) => sum + q, 0);
     if (!count) return true;
     const id = `ORD-${Math.max(...state.orders.map(order => Number(order.id.slice(4)))) + 1}`;
-    state.orders.push({ id, store: 'Keells · Nugegoda', area: 'Nugegoda', address: '138, High Level Road, Nugegoda', window: 'To be confirmed', requestedDay: 'Next run', nextRun: true, weight: quantities.reduce((sum, q, i) => sum + q * products[i].weight, 0), cartons: count, items: [...quantities], status: 'Pending', route: null, loaded: false, issue: '' });
+    state.orders.push(hydrateOrder({ ...orderDefaults,id,outletId:'OUT006',store:'Waypoint Fresh · Colombo 06',area:'Colombo 06',address:'Synthetic outlet OUT006 · Colombo',window:'To be confirmed',requestedDay:'Next run',nextRun:true,items:[...quantities],status:'Pending',route:null,loaded:false,issue:'' }));
     pendingDispatchOrderId = id;
-    record(`${id} requested by Keells · Nugegoda for the next dispatch run`);
+    record(`${id} requested by Waypoint Fresh OUT006 for the next dispatch run`);
     quantities = products.map(() => 0); tab = 'orders'; render();
     openDialog(`<div class="success-mark">${icon('check')}</div><h2>Your next-run request is saved.</h2><p>${id} · ${count} cartons<br>The morning run has closed. This order is queued for a future run; its delivery window is not yet confirmed.</p><div class="notice green">Your request is visible in the dispatch queue. This demo releases one route per run.</div><div class="dialog-actions"><button class="btn primary" data-action="close">Track order ${icon('arrow')}</button></div>`);
     return true;
   }
   if (action === 'order-detail' && role === 'store' && o) {
     const vehicle = o.route ? vehicleForOrder(o) : null;
-    openDialog(`<div class="eyebrow">${o.status === 'Delivered' ? 'Delivery receipt' : 'Replenishment order'} · ${o.id}</div><h2>Keells · Nugegoda</h2><p>${o.address}<br>Requested delivery · ${storeWindowLabel(o)}</p>${lifecycle(o)}<div class="store-review-lines">${o.items.map((q, i) => q ? `<div class="store-review-line"><div><b>${products[i].name}</b><small>${products[i].size}</small></div><strong>${q} <span>ctn</span></strong></div>` : '').join('')}</div><div class="store-review-total"><b>${o.cartons} cartons</b><span>${o.weight} kg</span></div>${o.status === 'Delivered' ? `<div class="store-delivery-receipt">${icon('check')}<div><b>Received by ${esc(o.recipient || 'store recipient')}</b><p>Cartons verified at ${esc(o.deliveredAt || '')}<span>Proof of delivery saved</span></p></div></div>` : `<p class="helper">${storeStatusDescription(o)}</p>`}${vehicle ? `<p class="helper">${o.route} · ${vehicle.id} · ${vehicle.driver}</p>` : ''}<div class="dialog-actions"><button class="btn primary" data-action="close">Done</button></div>`);
+    openDialog(`<div class="eyebrow">${o.status === 'Delivered' ? 'Delivery receipt' : 'Replenishment order'} · ${o.id}</div><h2>Waypoint Fresh · ${esc(o.outletId||'OUT006')}</h2><p>${o.address}<br>Requested delivery · ${storeWindowLabel(o)}</p>${lifecycle(o)}<div class="store-review-lines">${o.items.map((q, i) => q ? `<div class="store-review-line"><div><b>${products[i].name}</b><small>${products[i].size}</small></div><strong>${q} <span>ctn</span></strong></div>` : '').join('')}</div><div class="store-review-total"><b>${o.cartons} cartons</b><span>${o.weight} kg · ${(o.volume||0).toFixed(2)} m³</span></div>${o.status === 'Delivered' ? `<div class="store-delivery-receipt">${icon('check')}<div><b>Received by ${esc(o.recipient || 'store recipient')}</b><p>Cartons verified at ${esc(o.deliveredAt || '')}<span>Proof of delivery saved</span></p></div></div>` : `<p class="helper">${storeStatusDescription(o)}</p>`}${vehicle ? `<p class="helper">${o.route} · ${vehicle.id} · ${vehicle.driver}</p>` : ''}<div class="dialog-actions"><button class="btn primary" data-action="close">Done</button></div>`);
     return true;
   }
   return false;

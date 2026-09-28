@@ -158,6 +158,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     assert.ok((await order()).volume > 0);
     assert.equal((await order()).dockType, 'street');
     assert.match(await run("document.querySelector('#dialog').innerText"), /ORD-2847/);
+    assert.doesNotMatch(await run("document.querySelector('.store-tracking-card').innerText"),/Expected arrival/,'Unassigned orders have no planned ETA.');
   });
 
   await stage('dispatch protects capacity, selects vehicles and releases the same order', async () => {
@@ -188,11 +189,22 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     assert.deepEqual(await run('({km:routeMetrics().km,minutes:routeMetrics().minutes,etas:routeMetrics().etas.map(clockTime),fuel:routeMetrics().km/activeVehicle().kmPerL})'),{km:32,minutes:87,etas:['05:09','05:33','05:56'],fuel:32/4.7});
     assert.match(await mainText(),/32 km est\./);
     assert.match(await mainText(),/87 \/ 270 min/);
+    const dispatchEta=await run("routeEta(assigned().indexOf(state.orders.find(o=>o.id==='ORD-2847')))");
+    await click('[data-role="store"]');
+    await click('[data-action="store-orders"]');
+    assert.match(await run("document.querySelector('.store-tracking-card').innerText"),new RegExp(`Expected arrival\\s+${dispatchEta}`));
+    assert.match(await run("document.querySelector('.store-tracking-card').innerText"),/Delivery window\s+03:00 – 08:00[\s\S]*Route\s+R-07[\s\S]*Vehicle\s+VEH003/);
+    await click('[data-action="order-detail"][data-id="ORD-2847"]');
+    assert.match(await run("document.querySelector('#dialog').innerText"),new RegExp(`Expected arrival\\s+${dispatchEta}`));
+    await key('Escape');
+    await click('[data-role="dispatch"]');
     await click('[data-action="confirm-dispatch"]');
     assert.match(await run("document.querySelector('#dialog').innerText"), /VEH003/);
     await click('[data-action="release"]');
     assert.equal(await run('state.confirmed'), true);
     assert.equal((await order()).status, 'Ready to load');
+    await click('[data-role="store"]');
+    assert.match(await run("document.querySelector('.store-tracking-card').innerText"),new RegExp(`Expected arrival\\s+${dispatchEta}`));
     await click('[data-role="loader"]');
     assert.match(await mainText(), /ORD-2847/);
   });
@@ -305,17 +317,12 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     await click('[data-action="store-orders"]');
     assert.match(await mainText(), /ORD-2847/);
     assert.match(await mainText(), /Delivered/);
+    await click('[data-action="store-replenish"]');
+    assert.match(await run("document.querySelector('[data-product-row=\"0\"] .store-stock-cell').innerText"),/8\s+ctn[\s\S]*12 on order/,'Driver POD leaves cartons pending.');
+    await click('[data-action="store-orders"]');
     await click('[data-action="order-detail"][data-id="ORD-2847"]');
     assert.match(await run("document.querySelector('#dialog').innerText"), /Nimasha Perera/);
     await key('Escape');
-    await click('[data-action="store-confirm-receipt"][data-id="ORD-2847"]');
-    await click('[data-action="save-store-receipt"]');
-    assert.equal((await order()).receiptConfirmed,false);
-    await run("document.querySelector('#store-receipt-checked').checked=true");
-    await click('[data-action="save-store-receipt"]');
-    assert.equal((await order()).receiptConfirmed,true);
-    assert.equal((await order()).receiptConfirmedBy,'Nimasha Perera');
-    assert.match(await mainText(),/Store receipt confirmed/);
     await click('[data-action="store-report-issue"][data-id="ORD-2847"]');
     await input('#store-issue-type','Damaged goods','change');
     await click('[data-action="save-store-issue"]');
@@ -323,10 +330,31 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     await input('#store-issue-details','Two milk cartons were damaged on arrival.');
     await click('[data-action="save-store-issue"]');
     assert.equal((await order()).receiptIssueType,'Damaged goods');
+    assert.equal(await run('storeStock(products[0],0).stock'),8,'Reporting an issue does not receive stock.');
+    await click('[data-action="store-confirm-receipt"][data-id="ORD-2847"]');
+    await click('[data-action="save-store-receipt"]');
+    assert.equal((await order()).receiptConfirmed,false);
+    await run("document.querySelector('#store-receipt-checked').checked=true");
+    await click('[data-action="save-store-receipt"]');
+    assert.equal((await order()).receiptConfirmed,true);
+    assert.equal((await order()).receiptConfirmedBy,'Nimasha Perera');
+    assert.equal((await order()).receiptIssueType,'Damaged goods','Confirming later preserves the Store issue.');
+    assert.match(await mainText(),/Store receipt confirmed/);
+    await click('[data-action="store-replenish"]');
+    assert.match(await run("document.querySelector('[data-product-row=\"0\"] .store-stock-cell').innerText"),/20\s+ctn/,'Store confirmation adds received cartons.');
+    assert.doesNotMatch(await run("document.querySelector('[data-product-row=\"0\"] .store-stock-cell').innerText"),/on order/);
+    await click('[data-action="store-orders"]');
     await click('[data-role="dispatch"]');
+    assert.equal(await run('dispatchRouteState().key'),'completed','Store issue does not reopen delivery.');
+    assert.match(await mainText(),/receipt follow-up/i);
+    await click('#plan-tab-route');
+    assert.match(await mainText(),/ORD-2847 · OUT006 · Damaged goods: Two milk cartons were damaged on arrival/);
+    assert.doesNotMatch(await mainText(),/No outstanding exceptions/);
     await click('[data-role="store"]');
     await click('[data-action="store-orders"]');
     assert.match(await mainText(),/Store receipt issue · Damaged goods/);
+    await click('[data-action="store-replenish"]');
+    assert.match(await run("document.querySelector('[data-product-row=\"0\"] .store-stock-cell').innerText"),/20\s+ctn/);
     await click('[data-role="dispatch"]');
     await run("dispatchPanel='route';render()");
     await click('[data-action="select-stop"][data-id="ORD-2847"]');
@@ -352,7 +380,8 @@ test('Relay: connected order, planning constraints, field exceptions and respons
       if(width<=1100){
         await click('#plan-tab-vehicle');
         assert.match(await mainText(),/Completed/);
-        assert.match(await mainText(),/No outstanding exceptions/);
+        assert.match(await mainText(),/Receipt follow-up/);
+        assert.doesNotMatch(await mainText(),/No outstanding exceptions/);
         await click('#plan-tab-route');
       }
     }
@@ -464,8 +493,12 @@ test('Relay: connected order, planning constraints, field exceptions and respons
       await run("caseStudyOpen=true;role='dispatch';render();window.scrollTo(0,0)");
       const caseText = await mainText();
       assert.equal(await run("document.querySelectorAll('.persona-card').length"), 4);
-      assert.equal(await run("document.querySelectorAll('.screen-flow>li').length"), 4);
-      assert.match(caseText, /Connection lost in hill country/);
+      assert.equal(await run("document.querySelectorAll('.screen-flow>li').length"), 12);
+      assert.match(caseText, /Order tracking & ETA/);
+      assert.match(caseText, /Receipt check/);
+      assert.match(caseText, /Delivery & receipt follow-up/);
+      assert.match(caseText, /Connection lost during delivery/);
+      assert.match(caseText, /Reconnected state/);
       assert.match(caseText, /Explainability before invisible automation/);
       assert.match(caseText, /AI tool disclosure/i);
       await screenshot('case-study-1440');

@@ -97,6 +97,7 @@
 .store-tracking-facts>span{display:flex;align-items:center;gap:6px}
 .store-tracking-facts b{font-weight:550;color:var(--text)}
 .store-tracking-facts .icon{width:16px;height:16px}
+.store-arrival-details{margin:12px 0 20px}
 .store-tracking-card .lifecycle{margin-top:24px;margin-bottom:20px}
 .store-status-copy{font-size:14px;color:var(--muted);line-height:1.7}
 .store-tracking-issue{display:flex;gap:10px;margin-top:16px;font-size:13px}

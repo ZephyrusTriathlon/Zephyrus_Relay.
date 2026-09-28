@@ -6,8 +6,8 @@ function storeOwnOrders() {
 }
 
 function storeStock(p, index) {
-  const received = storeOwnOrders().filter(o => o.status === 'Delivered').reduce((sum, o) => sum + (o.items[index] || 0), 0);
-  const incoming = storeOwnOrders().filter(o => o.status !== 'Delivered').reduce((sum, o) => sum + (o.items[index] || 0), 0);
+  const received = storeOwnOrders().filter(o => o.status === 'Delivered' && o.receiptConfirmed === true).reduce((sum, o) => sum + (o.items[index] || 0), 0);
+  const incoming = storeOwnOrders().filter(o => o.status !== 'Delivered' || o.receiptConfirmed !== true).reduce((sum, o) => sum + (o.items[index] || 0), 0);
   const suggested = Math.max(0, p.recommend - received - incoming);
   return {
     stock: p.stock + received,
@@ -20,6 +20,11 @@ function storeStock(p, index) {
 
 function storeWindowLabel(o) {
   return o?.nextRun ? 'Next run · window pending' : `Tomorrow, ${o?.window || '03:00 – 08:00'}`;
+}
+
+function storeArrivalDetails(o) {
+  const eta=plannedEtaForOrder(o);
+  return eta?`<div class="store-arrival-details"><div class="detail-row"><span>Expected arrival</span><b>${eta}</b></div><div class="detail-row"><span>Delivery window</span><b>${esc(o.window)}</b></div><div class="detail-row"><span>Route</span><b>${esc(o.route)}</b></div><div class="detail-row"><span>Vehicle</span><b>${esc(vehicleForOrder(o).id)}</b></div></div>`:'';
 }
 
 function storeReceiptState(o) {
@@ -42,7 +47,7 @@ function storeView() {
   const vehicle = latest?.route ? vehicleForOrder(latest) : null;
   const delivered = latest?.status === 'Delivered';
   const deliveryTitle = latest ? `${latest.id} · ${latest.nextRun ? 'Queued for next run' : latest.status}` : state.confirmed ? 'Current dispatch has closed' : 'Tomorrow, 03:00 – 08:00';
-  const deliveryNote = !latest ? state.confirmed ? 'New orders join the next run. The delivery window is not yet confirmed.' : 'Order by 16:00 · Next-day replenishment' : delivered ? `Driver delivered ${latest.cartons} cartons to ${esc(latest.recipient || 'the store team')} at ${esc(latest.deliveredAt || 'the recorded time')}.` : latest.deferralReason ? `Deferred with reason: ${esc(latest.deferralReason)}` : latest.issue ? 'An exception needs attention. Your team is reviewing the next step.' : latest.nextRun ? 'Saved for the next dispatch run. Your delivery window is awaiting confirmation.' : latest.route ? `${latest.route} · ${vehicle.id} · Requested window ${latest.window}` : 'Your order is with dispatch. We’ll show the route here once assigned.';
+  const deliveryNote = !latest ? state.confirmed ? 'New orders join the next run. The delivery window is not yet confirmed.' : 'Order by 16:00 · Next-day replenishment' : delivered ? `Driver delivered ${latest.cartons} cartons to ${esc(latest.recipient || 'the store team')} at ${esc(latest.deliveredAt || 'the recorded time')}.` : latest.deferralReason ? `Deferred with reason: ${esc(latest.deferralReason)}` : latest.issue ? 'An exception needs attention. Your team is reviewing the next step.' : latest.nextRun ? 'Saved for the next dispatch run. Your delivery window is awaiting confirmation.' : plannedEtaForOrder(latest) ? `Expected arrival ${plannedEtaForOrder(latest)} · ${latest.route} · ${vehicle.id} · Delivery window ${latest.window}` : latest.route ? `${latest.route} · ${vehicle.id} · Requested window ${latest.window}` : 'Your order is with dispatch. We’ll show the route here once assigned.';
   return `${heading('Waypoint Fresh · OUT006 · Colombo', 'Keep your shelves ready.', 'Place next-day orders before 16:00 and follow every handoff through receipt.')}
     ${flow()}${offlineBanner()}
     <section class="store-overview" aria-label="Store overview">
@@ -99,7 +104,7 @@ function storeOrders(mine) {
   if (!mine.length) return `<section class="store-orders-empty"><span class="store-empty-symbol">${icon('box')}</span><span class="eyebrow">From order to shelf</span><h2>Your first replenishment starts here.</h2><p>Choose the quantities your store needs. Follow the same order through planning, loading and delivery.</p><div class="store-empty-steps"><span>Order</span>${icon('chevron')}<span>Track</span>${icon('chevron')}<span>Receive</span></div><button class="btn primary" data-action="store-replenish">Start replenishment ${icon('arrow')}</button></section>`;
   return `<section class="store-orders" aria-label="Your replenishment orders"><div class="store-section-heading"><div><h2>Every order, every handoff</h2><p class="store-meta">Updates from dispatch, warehouse and delivery in one place.</p></div><span class="store-meta">${mine.filter(o => o.status !== 'Delivered').length} active · ${mine.filter(o => o.status === 'Delivered').length} delivered</span></div>${[...mine].sort((a, b) => Number(b.id.slice(4)) - Number(a.id.slice(4))).map(o => {
     const vehicle = o.route ? vehicleForOrder(o) : null;
-    return `<article class="store-tracking-card"><header><div><span class="store-meta">Replenishment order</span><h3>${o.id}</h3></div>${badge(o.status)}</header><div class="store-tracking-facts"><span>${icon('box')}<b>${o.cartons}</b> cartons · ${o.weight} kg</span><span>${icon('clock')} ${storeWindowLabel(o)}</span>${vehicle ? `<span>${icon('truck')} ${o.route} · ${vehicle.id}</span>` : ''}</div>${lifecycle(o)}<p class="store-status-copy">${storeStatusDescription(o)}</p>${o.issue ? `<div class="notice store-tracking-issue">${icon('warning')}<span>${esc(o.issue)}</span></div>` : ''}${o.status === 'Delivered' ? `<div class="store-delivery-receipt">${icon('check')}<div><b>Driver POD · received by ${esc(o.recipient || 'store recipient')}</b><p>${o.cartons} cartons handed over · ${esc(o.deliveredAt || '')}<span>Proof of delivery saved</span></p></div></div>${storeReceiptState(o)}` : ''}<footer><span class="store-meta">${vehicle ? `${vehicle.driver} · Delivery partner` : 'Awaiting route assignment'}</span><button class="btn" data-action="order-detail" data-id="${o.id}">${o.status === 'Delivered' ? 'View receipt' : 'Order details'} ${icon('arrow')}</button></footer></article>`;
+    return `<article class="store-tracking-card"><header><div><span class="store-meta">Replenishment order</span><h3>${o.id}</h3></div>${badge(o.status)}</header><div class="store-tracking-facts"><span>${icon('box')}<b>${o.cartons}</b> cartons · ${o.weight} kg</span>${!plannedEtaForOrder(o)?`<span>${icon('clock')} ${storeWindowLabel(o)}</span>${vehicle ? `<span>${icon('truck')} ${o.route} · ${vehicle.id}</span>` : ''}`:''}</div>${storeArrivalDetails(o)}${lifecycle(o)}<p class="store-status-copy">${storeStatusDescription(o)}</p>${o.issue ? `<div class="notice store-tracking-issue">${icon('warning')}<span>${esc(o.issue)}</span></div>` : ''}${o.status === 'Delivered' ? `<div class="store-delivery-receipt">${icon('check')}<div><b>Driver POD · received by ${esc(o.recipient || 'store recipient')}</b><p>${o.cartons} cartons handed over · ${esc(o.deliveredAt || '')}<span>Proof of delivery saved</span></p></div></div>${storeReceiptState(o)}` : ''}<footer><span class="store-meta">${vehicle ? `${vehicle.driver} · Delivery partner` : 'Awaiting route assignment'}</span><button class="btn" data-action="order-detail" data-id="${o.id}">${o.status === 'Delivered' ? 'View receipt' : 'Order details'} ${icon('arrow')}</button></footer></article>`;
   }).join('')}</section>`;
 }
 
@@ -200,7 +205,7 @@ function handleStoreAction(action, button, o) {
   }
   if (action === 'order-detail' && role === 'store' && o) {
     const vehicle = o.route ? vehicleForOrder(o) : null;
-    openDialog(`<div class="eyebrow">${o.status === 'Delivered' ? 'Delivery receipt' : 'Replenishment order'} · ${o.id}</div><h2>Waypoint Fresh · ${esc(o.outletId||'OUT006')}</h2><p>${o.address}<br>Requested delivery · ${storeWindowLabel(o)}</p>${lifecycle(o)}<div class="store-review-lines">${o.items.map((q, i) => q ? `<div class="store-review-line"><div><b>${products[i].name}</b><small>${products[i].size}</small></div><strong>${q} <span>ctn</span></strong></div>` : '').join('')}</div><div class="store-review-total"><b>${o.cartons} cartons</b><span>${o.weight} kg · ${(o.volume||0).toFixed(2)} m³</span></div>${o.status === 'Delivered' ? `<div class="store-delivery-receipt">${icon('check')}<div><b>Driver POD · received by ${esc(o.recipient || 'store recipient')}</b><p>${o.cartons} cartons handed over · ${esc(o.deliveredAt || '')}<span>Proof of delivery saved</span></p></div></div>${storeReceiptState(o)}` : `<p class="helper">${storeStatusDescription(o)}</p>`}${vehicle ? `<p class="helper">${o.route} · ${vehicle.id} · ${vehicle.driver}</p>` : ''}<div class="dialog-actions"><button class="btn primary" data-action="close">Done</button></div>`);
+    openDialog(`<div class="eyebrow">${o.status === 'Delivered' ? 'Delivery receipt' : 'Replenishment order'} · ${o.id}</div><h2>Waypoint Fresh · ${esc(o.outletId||'OUT006')}</h2><p>${o.address}<br>Requested delivery · ${storeWindowLabel(o)}</p>${storeArrivalDetails(o)}${lifecycle(o)}<div class="store-review-lines">${o.items.map((q, i) => q ? `<div class="store-review-line"><div><b>${products[i].name}</b><small>${products[i].size}</small></div><strong>${q} <span>ctn</span></strong></div>` : '').join('')}</div><div class="store-review-total"><b>${o.cartons} cartons</b><span>${o.weight} kg · ${(o.volume||0).toFixed(2)} m³</span></div>${o.status === 'Delivered' ? `<div class="store-delivery-receipt">${icon('check')}<div><b>Driver POD · received by ${esc(o.recipient || 'store recipient')}</b><p>${o.cartons} cartons handed over · ${esc(o.deliveredAt || '')}<span>Proof of delivery saved</span></p></div></div>${storeReceiptState(o)}` : `<p class="helper">${storeStatusDescription(o)}</p>`}${vehicle ? `<p class="helper">${o.route} · ${vehicle.id} · ${vehicle.driver}</p>` : ''}<div class="dialog-actions"><button class="btn primary" data-action="close">Done</button></div>`);
     return true;
   }
   return false;

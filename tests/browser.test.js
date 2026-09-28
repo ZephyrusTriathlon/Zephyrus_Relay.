@@ -34,6 +34,33 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     if (width < 500) await screenshot(`${roleName}-${width}-viewport`, false);
   };
 
+  await t.test('showcase outlets and Colombo route calculations match the supplied scenario', async () => {
+    assert.deepEqual(await run("state.orders.filter(o=>['OUT001','OUT004','OUT005','OUT011','OUT014'].includes(o.outletId)).map(o=>[o.outletId,o.dockType,o.parkingConstraint,o.window])"),[
+      ['OUT004','street','normal','05:30 – 08:00'],['OUT005','rear_dock','normal','04:00 – 07:45'],['OUT001','street','van_only','05:00 – 07:30'],['OUT011','rear_dock','normal','03:00 – 08:00'],['OUT014','street','normal','05:30 – 08:00']
+    ]);
+    assert.match(await run("document.querySelector('.page-heading .eyebrow').textContent"),/Monday, 25 May · planning Tuesday, 26 May · Peliyagoda/);
+    assert.match(await run("document.querySelector('.page-heading .subtitle').textContent"),/Operating day · Festival ramp 0\.6 · Monsoon/);
+    assert.deepEqual(await run('({km:routeMetrics().km,minutes:routeMetrics().minutes,etas:routeMetrics().etas.map(clockTime),fuel:routeMetrics().km/activeVehicle().kmPerL})'),{km:28,minutes:63,etas:['05:30','05:54'],fuel:28/4.7});
+    assert.match(await mainText(),/28 km est\./);
+    assert.match(await mainText(),/63 \/ 270 min/);
+    assert.equal(await run("planChecks().find(check=>check[0]==='Delivery windows')[2]"),true);
+    try {
+      await run("activeVehicle().fuelUsed=475;render()");
+      assert.equal(await run("vehicleBlockers(activeVehicle()).includes('weekly fuel quota would be exceeded')"),true);
+      assert.equal(await run("planChecks().find(check=>check[0]==='Fuel quota')[2]"),false);
+    } finally { await run("activeVehicle().fuelUsed=312;render()"); }
+    const original=await run("assigned()[1].window");
+    try {
+      await run("assigned()[1].window='04:00 – 05:45';render()");
+      assert.match(await mainText(),/OUT005 projected 05:54 · window closes 05:45/);
+      assert.equal(await run("vehicleBlockers(activeVehicle()).some(reason=>reason.includes('OUT005 projected'))"),true);
+      await click('[data-action="confirm-dispatch"]');
+      assert.equal(await run("document.querySelector('#dialog').open"),false);
+      await run("handleDispatchAction('release',{},null)");
+      assert.equal(await run('state.confirmed'),false);
+    } finally { await run(`assigned()[1].window=${JSON.stringify(original)};render()`); }
+  });
+
   await stage('route progress and capacity remain accurate with stale preparation flags', async () => {
     await run("state.ready=true;state.confirmed=true;state.started=true;assigned()[0].status='Delivered';assigned()[0].deliveredAt='09:25';assigned()[0].recipient='Store manager';assigned()[1].status='In transit';render()");
     assert.match(await mainText(),/Partially completed/);
@@ -129,6 +156,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     assert.equal((await order()).weight, 376);
     assert.equal((await order()).tempRequirement, 'chilled');
     assert.ok((await order()).volume > 0);
+    assert.equal((await order()).dockType, 'street');
     assert.match(await run("document.querySelector('#dialog').innerText"), /ORD-2847/);
   });
 
@@ -157,6 +185,9 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     await click('[data-action="assign"][data-id="ORD-2847"]');
     assert.equal((await order()).route, 'R-07');
     assert.equal((await order()).cartons, 40);
+    assert.deepEqual(await run('({km:routeMetrics().km,minutes:routeMetrics().minutes,etas:routeMetrics().etas.map(clockTime),fuel:routeMetrics().km/activeVehicle().kmPerL})'),{km:32,minutes:87,etas:['05:09','05:33','05:56'],fuel:32/4.7});
+    assert.match(await mainText(),/32 km est\./);
+    assert.match(await mainText(),/87 \/ 270 min/);
     await click('[data-action="confirm-dispatch"]');
     assert.match(await run("document.querySelector('#dialog').innerText"), /VEH003/);
     await click('[data-action="release"]');
@@ -263,6 +294,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     }
     assert.equal((await order()).status, 'Delivered');
     assert.equal((await order()).recipient, 'Nimasha Perera');
+    assert.equal((await order()).receiptConfirmed, false, 'Driver POD does not confirm Store receipt.');
     assert.match((await order()).deliveredAt, /^\d\d:\d\d$/);
     assert.match(await mainText(), /all delivered|route complete|route completed/i);
     await screenshot('delivery-complete');
@@ -276,6 +308,32 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     await click('[data-action="order-detail"][data-id="ORD-2847"]');
     assert.match(await run("document.querySelector('#dialog').innerText"), /Nimasha Perera/);
     await key('Escape');
+    await click('[data-action="store-confirm-receipt"][data-id="ORD-2847"]');
+    await click('[data-action="save-store-receipt"]');
+    assert.equal((await order()).receiptConfirmed,false);
+    await run("document.querySelector('#store-receipt-checked').checked=true");
+    await click('[data-action="save-store-receipt"]');
+    assert.equal((await order()).receiptConfirmed,true);
+    assert.equal((await order()).receiptConfirmedBy,'Nimasha Perera');
+    assert.match(await mainText(),/Store receipt confirmed/);
+    await click('[data-action="store-report-issue"][data-id="ORD-2847"]');
+    await input('#store-issue-type','Damaged goods','change');
+    await click('[data-action="save-store-issue"]');
+    assert.equal((await order()).receiptIssueType,undefined);
+    await input('#store-issue-details','Two milk cartons were damaged on arrival.');
+    await click('[data-action="save-store-issue"]');
+    assert.equal((await order()).receiptIssueType,'Damaged goods');
+    await click('[data-role="dispatch"]');
+    await click('[data-role="store"]');
+    await click('[data-action="store-orders"]');
+    assert.match(await mainText(),/Store receipt issue · Damaged goods/);
+    await click('[data-role="dispatch"]');
+    await run("dispatchPanel='route';render()");
+    await click('[data-action="select-stop"][data-id="ORD-2847"]');
+    assert.match(await run("document.querySelector('#dialog').innerText"),/Store receipt confirmed by Nimasha Perera/);
+    assert.match(await run("document.querySelector('#dialog').innerText"),/Store receipt issue: Damaged goods/);
+    await key('Escape');
+    await click('[data-role="store"]');
     await screenshot('store-delivered');
   });
 
@@ -428,7 +486,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     try {
       await viewport(1440, 1000);
       await run("state=seed();caseStudyOpen=false;role='dispatch';dispatchPanel='queue';render()");
-      assert.equal(await run("document.querySelectorAll('.constraint-check').length"), 6);
+      assert.equal(await run("document.querySelectorAll('.constraint-check').length"), 7);
       assert.equal(await run("planChecks().every(check=>check[2])"), true);
       await click('[data-action="assign"][data-id="ORD-2846"]');
       assert.match(await run("document.querySelector('#dialog').innerText"), /van-only outlet requires a van/);

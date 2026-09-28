@@ -108,6 +108,7 @@
 .store-delivery-receipt b{font-size:14px;font-weight:550}
 .store-delivery-receipt p{font-size:13px;margin:5px 0 0;line-height:1.6;color:var(--accent)}
 .store-delivery-receipt p span{display:block;color:var(--muted);font-size:12px}
+.store-receipt-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 .store-orders-empty{max-width:560px;text-align:center;margin:48px auto;padding:20px}
 .store-empty-symbol{display:grid;place-items:center;width:56px;height:56px;background:var(--soft);border-radius:10px;color:var(--accent);margin:0 auto 24px}
 .store-empty-symbol .icon{width:25px;height:25px}

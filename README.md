@@ -2,7 +2,7 @@
 
 Relay is a connected delivery-operations prototype for the fictional Waypoint Group: Order → Plan → Load → Deliver → Confirm receipt. It demonstrates the four official user roles and uses the supplied synthetic network conventions for outlets, vehicles, depots, access, temperature, capacity and delivery windows.
 
-Open **Design case study** in the prototype for the four personas, screen rationales, named degradation scenario, scope and tradeoff explanation, style guide, and AI tool disclosure.
+The design case study is reserved for the final design PDF and is not part of the web application.
 
 ## Run
 
@@ -26,7 +26,7 @@ These are four fictional people with fixed roles. All use the demo password **`R
 
 Sign in with the Store account to begin. During the walkthrough use **Account > Switch demo account**, then select the next employee. This judge-only shortcut simulates signing out and signing in as a different account; shared order and route progress stay intact. It is also available on the login page and at workflow handoffs.
 
-Login is simulated in the frontend on this browser only. The separate `relay_session` entry stores only the account ID. Refresh preserves the session; **Account > Sign out** clears only the session. **Reset demo** restores operational data while keeping the current account signed in. There is no public signup, editable role, real account provisioning or server-side authorization. Frontend/localStorage changes can bypass this prototype gating.
+Login is simulated in the frontend on this browser only. The separate `relay_session` entry stores only the account ID. Refresh preserves the session; **Account > Sign out** clears only the session. There is no public signup, editable role, real account provisioning or server-side authorization. Frontend/localStorage changes can bypass this prototype gating.
 
 ## A complete judging walkthrough
 
@@ -37,12 +37,12 @@ Login is simulated in the frontend on this browser only. The separate `relay_ses
 5. **Store → Order tracking:** the same order shows the Dispatch-calculated **Expected arrival**, delivery window, route and vehicle, then the Driver POD after delivery. Open **View receipt**, check the cartons and choose **Confirm receipt**; only then do received cartons update stock and replenishment suggestions.
 6. **Store → Dispatch issue path:** on a delivered OUT006 order choose **Report an issue**, select a type and enter useful details. Return to **Dispatch → Route** to see the completed delivery and separate Store receipt follow-up. The activity control records the shared handoffs.
 
-Use **Account > Switch demo account** between each employee in the steps above. Normal navigation contains only the signed-in workspace and account controls. **Design case study** explains the journey and offers a confirmed reset. Reset affects operational data only and preserves the signed-in account.
+Use **Account > Switch demo account** between each employee in the steps above.
 
 ## Useful states to demonstrate
 
 - **Delivery exceptions:** report Store closed, Recipient unavailable, Damaged goods, Partial delivery, Delivery refused or Access delayed. **Save & return later** holds the order open and advances to another stop. Outstanding stops remain visible; a return visit requires a resolution note and a new arrival. A route with deferred stops is never reported as complete.
-- **Named degradation — Connection lost during delivery:** use the connectivity control in Warehouse or Delivery, or launch it from the Design case study. The live example uses the Colombo route; coverage loss is especially relevant in hill country, along the Kandy corridor and in rural districts. Loading, issue resolutions and receipts persist through refresh, with last-sync and pending-update feedback. Reconnecting reconciles the simulated queue. Dispatch route changes are unavailable while offline.
+- **Named degradation — Connection lost during delivery:** use the connectivity control in Warehouse or Delivery. The live example uses the Colombo route; coverage loss is especially relevant in hill country, along the Kandy corridor and in rural districts. Loading, issue resolutions and receipts persist through refresh, with last-sync and pending-update feedback. Reconnecting reconciles the simulated queue. Dispatch route changes are unavailable while offline.
 - **Planning constraints:** weight, volume, refrigeration, van-only access, depot, fuel quota, trip limit and Fresh’s pre-dawn time budget are visible. Incompatible vehicles and assignments are blocked with an explanation.
 - **Explainable deferral:** select an unassigned order, choose **Defer**, record the reason and impact, and see the decision shared with the store.
 - **Validation and empty states:** clear search results, try an empty order, exceed vehicle capacity, leave resolution details blank, or enter an incorrect proof-of-delivery count. Each state explains the next useful action.
@@ -52,7 +52,7 @@ Use **Account > Switch demo account** between each employee in the steps above. 
 
 The four workspaces share warm neutral surfaces, deep green actions, restrained status colors, readable operational type and a compact order lifecycle. Mobile Store uses product rows recomposed as touch-friendly cards and an order summary above navigation. Warehouse prioritizes loading sequence on tablets. Delivery uses a single next-stop view, an optional route overview and a primary action above the safe-area-aware navigation. Toasts occupy a separate space above the action bar.
 
-Interface content is real DOM text, grouped using Grid and Flexbox. Small route and vehicle illustrations use SVG; the application itself is not a flattened image or canvas. Shared tokens and patterns live in `styles.css`; persona styling is in `dispatch.css`, `store.css`, `field.css` and `case-study.css`. `script.js` and `workspace.js` manage the shared state and shell; the corresponding view JavaScript files contain their screens and interactions. The system-font stack keeps the prototype self-contained.
+Interface content is real DOM text, grouped using Grid and Flexbox. Small route and vehicle illustrations use SVG; the application itself is not a flattened image or canvas. Shared tokens and patterns live in `styles.css`; role styling is in `dispatch.css`, `store.css` and `field.css`. `script.js` and `workspace.js` manage the shared state and shell; the corresponding view JavaScript files contain their screens and interactions. The system-font stack keeps the prototype self-contained.
 
 Dialogs have accessible names, keyboard focus containment and focus restoration. Controls provide visible focus, labeled inputs and status text. Touch targets are enlarged in the field interfaces and reduced-motion preferences are respected.
 

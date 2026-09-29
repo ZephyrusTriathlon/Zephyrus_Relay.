@@ -15,7 +15,7 @@ function enterAccount(id) {
   closeDialog();
   localStorage.removeItem(sessionKey);
   localStorage.setItem(sessionKey, account.id);
-  caseStudyOpen=false;role=account.workspace;
+  role=account.workspace;
   const reveal=role==='dispatch' && pendingDispatchOrderId && dispatchHandoff(pendingDispatchOrderId);
   history.replaceState(null,'',`#${role}`);render();window.scrollTo(0,0);
   if(reveal)finishDispatchHandoff();else document.querySelector('#main')?.focus({preventScroll:true});
@@ -61,20 +61,19 @@ function render() {
   const account=currentAccount();
   if(!account){loginView();return;}
   role=account.workspace;
-  if(!caseStudyOpen && location.hash!==`#${role}`)history.replaceState(null,'',`#${role}`);
+  if(location.hash!==`#${role}`)history.replaceState(null,'',`#${role}`);
   const r={...roles[role],user:account.name,initials:account.name.split(' ').map(name=>name[0]).join(''),title:accountRole(account)};
-  document.body.dataset.role = caseStudyOpen?'case-study':role;
+  document.body.dataset.role = role;
   document.body.dataset.hasAction = String((role === 'store' && tab === 'replenishment') || (role === 'delivery' && state.ready && assigned().some(o => o.status !== 'Delivered')));
   document.querySelector('#app').innerHTML = `
     <aside class="sidebar">
       <a class="brand" href="#${role}" aria-label="Relay workspace home"><span class="brand-mark">⇄</span><span>relay<span class="brand-dot">.</span></span></a>
       <div class="workspace-label">Your workspace</div>
-      <nav class="nav" aria-label="Workspace navigation"><button data-action="workspace-home" class="active" aria-current="page" title="${r.name}">${icon(r.icon)}<span>${r.short}</span></button><button data-action="account" title="Your account">${icon('grid')}<span>Account</span></button></nav>
+      <nav class="nav" aria-label="Workspace navigation"><button data-action="workspace-home" class="active" aria-current="page" title="${r.name}">${icon(r.icon)}<span>${r.short}</span></button><button data-action="account" title="Your account">${icon('grid')}<span>Account</span></button><button data-action="activity" title="Notification" aria-label="Open activity feed"><span class="notification-icon">${icon('bell')}${state.pending.length?'<span class="notification-dot"></span>':''}</span><span>Notification</span></button></nav>
       <div class="sidebar-bottom"><div class="demo-note"><b>Waypoint Group delivery network</b><span>Peliyagoda distribution centre</span><span>Colombo, Sri Lanka</span></div><div class="profile"><span class="avatar">${r.initials}</span><div class="stack"><b>${r.user}</b><small>${r.title}</small></div></div></div>
     </aside>
     <div class="shell">
-      <header class="topbar"><div class="breadcrumb"><span>${caseStudyOpen?'Submission':'Operations'}</span>${icon('chevron')}<b>${caseStudyOpen?'Design case study':r.name}</b></div><div class="row">${state.offline?'<span class="online"><span class="dot offline"></span>Offline · saved locally</span>':caseStudyOpen?'<span class="online"><span class="dot"></span>Source-aligned prototype</span>':''}<button class="btn ghost icon-btn" data-action="case-study" aria-label="Open design case study">${icon('help')}</button><button class="btn ghost icon-btn" data-action="activity" aria-label="Open activity feed">${icon('bell')}${state.pending.length?'<span class="notification-dot"></span>':''}</button><button class="btn ghost" data-action="account" aria-label="Your account: ${r.user}">Account</button></div></header>
-      <main id="main" tabindex="-1" class="view-${caseStudyOpen?'case-study':role}">${caseStudyOpen?caseStudyView():role === 'dispatch' ? dispatchView() : role === 'store' ? storeView() : role === 'loader' ? loaderView() : deliveryView()}</main>
+      <main id="main" tabindex="-1" class="view-${role}">${role === 'dispatch' ? dispatchView() : role === 'store' ? storeView() : role === 'loader' ? loaderView() : deliveryView()}</main>
     </div>`;
   // Legacy workflow handoffs become explicit judge conveniences, never employee navigation.
   document.querySelectorAll('#main [data-role]').forEach(button=>{

@@ -19,7 +19,7 @@ const hydrateOrder=o=>{o.weight=o.items.reduce((n,q,i)=>n+q*products[i].weight,0
 const seed=()=>{const data=rawSeed();data.orders.forEach(hydrateOrder);return data};
 let state;try{state=JSON.parse(localStorage.getItem('relay-v1'))||seed()}catch{state=seed()}
 state.orders?.forEach(o=>{if(o.outletId==='OUT004'||o.outletId==='OUT006')o.dockType='street'});
-let role=['dispatch','store','loader','delivery'].includes(location.hash.slice(1))?location.hash.slice(1):'dispatch',tab='replenishment',queueFilter='all',queueQuery='',productQuery='',quantities=products.map(()=>0),toastTimer,caseStudyOpen=location.hash.slice(1)==='case-study';
+let role=['dispatch','store','loader','delivery'].includes(location.hash.slice(1))?location.hash.slice(1):'dispatch',tab='replenishment',queueFilter='all',queueQuery='',productQuery='',quantities=products.map(()=>0),toastTimer;
 const roles={store:{name:'Store operations',short:'Store',icon:'store',user:'Nimasha Perera',initials:'NP',title:'Store manager · OUT006'},dispatch:{name:'Dispatch planning',short:'Dispatch',icon:'route',user:'Dinuka Fernando',initials:'DF',title:'Dispatcher · Peliyagoda'},loader:{name:'Warehouse loading',short:'Loading',icon:'box',user:'Kasun Silva',initials:'KS',title:'Loader · Bay 03'},delivery:{name:'Delivery route',short:'Delivery',icon:'truck',user:'Amal Perera',initials:'AP',title:'Driver · VEH003'}};
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const assigned=()=>state.orders.filter(o=>o.route==='R-07');
@@ -37,9 +37,9 @@ if(sessionAction==='switch-account'){switchDemoAccount();return;}
 if(sessionAction==='demo-sign-in'){enterAccount(button.dataset.account);return;}
 if(sessionAction==='close'){closeDialog();return;}
 if(!currentAccount())return;
-if(sessionAction==='sign-out'){closeDialog();localStorage.removeItem(sessionKey);caseStudyOpen=false;render();document.querySelector('#login-id').focus();return;}
+if(sessionAction==='sign-out'){closeDialog();localStorage.removeItem(sessionKey);render();document.querySelector('#login-id').focus();return;}
 if(sessionAction==='account'){const account=currentAccount();openDialog(`<h2>${account.name}</h2><p>${accountRole(account)}<br>${account.email}</p><button class="btn wide" data-action="sign-out">Sign out</button><div class="login-demo"><span class="eyebrow">Judge walkthrough only</span><button class="mini-btn" data-action="switch-account">Switch demo account</button></div>`);return;}
-if(sessionAction==='workspace-home'){caseStudyOpen=false;render();return;}
+if(sessionAction==='workspace-home'){render();return;}
 const action=button.dataset.action,o=state.orders.find(o=>o.id===button.dataset.id);if(handleStoreAction(action,button,o)||handleFieldAction(action,button,o)||handleDispatchAction(action,button,o))return;switch(action){
 case 'store-orders':tab='orders';render();break;
 case 'store-replenish':tab='replenishment';render();break;
@@ -48,15 +48,9 @@ case 'go-dispatch':switchDemoAccount();break;
 case 'offline':state.offline=!state.offline;if(!state.offline){const n=state.pending.length;state.pending=[];record(`${n} queued updates synced in demo workspace`);toast(`${n} updates synced. Your team is up to date.`)}else{save();toast('Offline simulation enabled. Progress will save on this device.')}render();break;
 case 'contact':openDialog(`<h2>Contact ${o.store}</h2><p>Store receiving desk<br>Ask for the duty manager and quote ${o.id}.</p><div class="notice">Demo contact: +94 11 234 5678. This is sample data; no call is placed by the prototype.</div>${dialogFooter()}`);break;
 case 'activity':openDialog(`<div class="eyebrow">Shared activity</div><h2>Every handoff, connected.</h2>${state.history.length?`<div class="activity-list">${state.history.map(h=>`<div class="history-entry"><small>${h.time}</small><p style="margin:5px 0 0;color:var(--text)">${esc(h.message)}</p></div>`).join('')}</div>`:'<p>Your order, loading and delivery updates will appear here.</p>'}${dialogFooter()}`);break;
-case 'case-study':closeDialog();caseStudyOpen=true;location.hash='case-study';render();window.scrollTo(0,0);document.querySelector('#main')?.focus({preventScroll:true});break;
-case 'show-degradation':showDegradation();break;
-case 'reset-confirm':openDialog(`<h2>Start a fresh demo?</h2><p>This clears orders, receipts and offline updates saved in this browser and restores the original planning scenario. You will stay signed in.</p><div class="dialog-actions"><button class="btn" data-action="close">Keep my progress</button><button class="btn danger" data-action="reset">Reset demo data</button></div>`);break;
-case 'reset':state=seed();save();quantities=products.map(()=>0);role=currentAccount().workspace;caseStudyOpen=false;tab='replenishment';stockFilter='all';fieldRouteOpen=false;location.hash=role;closeDialog();render();toast('Demo reset. Ready for a new journey.');break;
 }});
 window.addEventListener('hashchange',()=>{
-  const next=location.hash.slice(1);
-  if(next.startsWith('case-')&&next!=='case-study'&&caseStudyOpen)return;
-  caseStudyOpen=!!currentAccount()&&next==='case-study';closeDialog();render();window.scrollTo(0,0);
+  closeDialog();render();window.scrollTo(0,0);
 });
 
 document.querySelector('#dialog').addEventListener('click',e=>{if(e.target===e.currentTarget){const r=e.currentTarget.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)closeDialog()}});

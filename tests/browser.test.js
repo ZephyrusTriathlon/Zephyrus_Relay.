@@ -23,7 +23,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
   await run("state=seed(); save(); localStorage.setItem('relay_session','dispatcher');role='dispatch'; render()");
 
   const switchAccount = async workspace => {
-    await click('.topbar [data-action="account"]');
+    await click('.nav [data-action="account"]');
     await click('#dialog [data-action="switch-account"]');
     const id={store:'store',dispatch:'dispatcher',loader:'loader',delivery:'driver'}[workspace];
     await click(`[data-account="${id}"]`);
@@ -54,6 +54,11 @@ test('Relay: connected order, planning constraints, field exceptions and respons
       assert.equal(await run('role'),workspace);
       assert.equal(await run("document.querySelectorAll('#app [data-role]').length"),0);
       assert.equal(await run('currentAccount().id'),id);
+      assert.equal(await run("document.querySelector('.topbar')"),null);
+      assert.deepEqual(await run("[...document.querySelectorAll('.nav button')].map(button=>button.dataset.action)"),['workspace-home','account','activity']);
+      await click('.nav [data-action="activity"]');
+      assert.match(await run("document.querySelector('#dialog').innerText"),/Every handoff, connected/);
+      await key('Escape');
       for(const target of ['store','dispatch','loader','delivery']){
         await run(`location.hash=${JSON.stringify(target)}`);
         await waitFor(`location.hash==='#${workspace}'`);
@@ -61,7 +66,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
       }
       await run('window.qaBeforeReload=true');await send('Page.reload');await waitFor(`!window.qaBeforeReload && !!document.querySelector('.view-${workspace}')`);
       assert.equal(await run('currentAccount().id'),id);
-      await click('.topbar [data-action="account"]');
+      await click('.nav [data-action="account"]');
       assert.match(await run("document.querySelector('#dialog').innerText"),new RegExp(await run('currentAccount().name')));
       await click('[data-action="sign-out"]');
       assert.ok(await run("!!document.querySelector('#login-form')"));
@@ -70,7 +75,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     }
     await input('#login-id','store');await input('#login-password','RelayDemo!26');await submitLogin();
     await switchAccount('dispatch');assert.equal(await run('JSON.stringify(state)'),saved);
-    await click('.topbar [data-action="account"]');await click('#dialog [data-action="switch-account"]');
+    await click('.nav [data-action="account"]');await click('#dialog [data-action="switch-account"]');
     await key('Tab');assert.ok(await run("document.querySelector('#dialog').contains(document.activeElement)"));
     await key('Escape');await viewport(1440);
   });
@@ -542,39 +547,22 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     }
   });
 
-  await t.test('Designathon evidence and named degradation scenario are available in the prototype', async () => {
-    const savedState = await run('JSON.stringify(state)');
-    try {
-      await viewport(1440, 1000);
-      await run("caseStudyOpen=true;localStorage.setItem('relay_session','dispatcher');role='dispatch';render();window.scrollTo(0,0)");
-      const caseText = await mainText();
-      assert.equal(await run("document.querySelectorAll('.persona-card').length"), 4);
-      assert.equal(await run("document.querySelectorAll('.screen-flow>li').length"), 12);
-      assert.match(caseText, /Order tracking & ETA/);
-      assert.match(caseText, /Receipt check/);
-      assert.match(caseText, /Delivery & receipt follow-up/);
-      assert.match(caseText, /Connection lost during delivery/);
-      assert.match(caseText, /Reconnected state/);
-      assert.match(caseText, /Explainability before invisible automation/);
-      assert.match(caseText, /AI tool disclosure/i);
-      await screenshot('case-study-1440');
-      await viewport(390, 844);
-      await screenshot('case-study-390');
-      await click('[data-action="show-degradation"]');
-      assert.equal(await run('state.offline'), true);
-      assert.equal(await run('state.pending.length'), 3);
-      assert.match(await mainText(), /Degradation: connection lost/);
-      await screenshot('delivery-degradation-390', false);
-    } finally {
-      await run(`state=JSON.parse(${JSON.stringify(savedState)});save();caseStudyOpen=false;localStorage.setItem('relay_session','dispatcher');role='dispatch';location.hash='dispatch';render()`);
-    }
+  await t.test('design case study is absent from the application', async () => {
+    await run("localStorage.setItem('relay_session','dispatcher');role='dispatch';render()");
+    assert.equal(await run("document.querySelector('script[src=\"case-study.js\"],link[href=\"case-study.css\"]')"),null);
+    await click('.nav [data-action="account"]');
+    assert.equal(await run("document.querySelector('#dialog [data-action=\"case-study\"]')"),null);
+    await key('Escape');
+    await run("location.hash='case-study'");
+    await waitFor("location.hash==='#dispatch'");
+    assert.equal(await run("document.querySelector('#main').className"),'view-dispatch');
   });
 
   await t.test('source-aligned constraints, explainable deferral and capacity outlook are interactive', async () => {
     const savedState = await run('JSON.stringify(state)');
     try {
       await viewport(1440, 1000);
-      await run("state=seed();caseStudyOpen=false;localStorage.setItem('relay_session','dispatcher');role='dispatch';dispatchPanel='queue';render()");
+      await run("state=seed();localStorage.setItem('relay_session','dispatcher');role='dispatch';dispatchPanel='queue';render()");
       assert.equal(await run("document.querySelectorAll('.constraint-check').length"), 7);
       assert.equal(await run("planChecks().every(check=>check[2])"), true);
       await click('[data-action="assign"][data-id="ORD-2846"]');
@@ -593,24 +581,20 @@ test('Relay: connected order, planning constraints, field exceptions and respons
       assert.match(await run("document.querySelector('#dialog').innerText"), /reefer vehicles and drivers on standby/);
       await key('Escape');
     } finally {
-      await run(`state=JSON.parse(${JSON.stringify(savedState)});save();caseStudyOpen=false;localStorage.setItem('relay_session','dispatcher');role='dispatch';render()`);
+      await run(`state=JSON.parse(${JSON.stringify(savedState)});save();localStorage.setItem('relay_session','dispatcher');role='dispatch';render()`);
     }
   });
 
-  await t.test('sign out preserves completed work and reset preserves the account', async () => {
+  await t.test('sign out preserves completed work', async () => {
     const completed=await run('JSON.stringify(state)');
     try {
       await switchAccount('store');
-      await click('.topbar [data-action="account"]');await click('[data-action="sign-out"]');
+      await click('.nav [data-action="account"]');await click('[data-action="sign-out"]');
       assert.equal(await run("localStorage.getItem('relay-v1')"),completed);
       await click('[data-action="switch-account"]');await click('[data-account="store"]');
       assert.equal(await run('JSON.stringify(state)'),completed);
-      await click('.topbar [data-action="case-study"]');await waitFor("location.hash==='#case-study'");
-      await click('[data-action="reset-confirm"]');await click('[data-action="reset"]');
       assert.equal(await run('currentAccount().id'),'store');
       assert.equal(await run('role'),'store');
-      assert.equal(await run('state.orders.length'),5);
-      assert.equal(await run('state.started'),false);
     } finally {
       await run(`state=JSON.parse(${JSON.stringify(completed)});save();enterAccount('dispatcher')`);
     }

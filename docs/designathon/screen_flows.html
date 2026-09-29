@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Relay screen flows and rationale for all four Designathon roles.">
+  <title>Relay Screen Flows</title>
+  <link rel="stylesheet" href="designathon.css">
+</head>
+<body>
+<main class="document">
+  <section class="page flow-overview">
+    <header class="page-header"><span>Relay screen flows</span><span>Workflow overview</span></header>
+    <span class="eyebrow">Workflow overview</span>
+    <h1>Twelve screens, one connected delivery record.</h1>
+    <p class="lede">The main path moves one order from replenishment to receipt. Exception branches remain visible and return to the same order lifecycle.</p>
+
+    <div class="flow-stack" aria-label="Relay screen flow">
+      <div class="flow-node"><b>Store | Order replenishment</b><small>Choose full cartons and place the order before 16:00.</small></div>
+      <div class="flow-link"></div>
+      <div class="flow-node"><b>Dispatcher | Confirmed order queue</b><small>Select confirmed orders and review service risk.</small></div>
+      <div class="flow-link branch"></div>
+      <div class="flow-node"><b>Dispatcher | Plan &amp; validate</b><small>Assign stops and vehicle, then check feasibility.</small></div>
+      <div class="flow-link branch"></div>
+      <div class="flow-node"><b>Loader | Loading manifest</b><small>Load in reverse stop order and check each shipment.</small></div>
+      <div class="flow-link branch"></div>
+      <div class="flow-node"><b>Driver | Next stop</b><small>Record arrival, exceptions, and delivery.</small></div>
+      <div class="flow-link branch"></div>
+      <div class="flow-node"><b>Driver | Proof of delivery</b><small>Verify cartons, recipient, and time.</small></div>
+      <div class="flow-link"></div>
+      <div class="flow-node"><b>Store | Receipt check</b><small>Inspect the POD, confirm receipt, or report an issue.</small></div>
+    </div>
+
+    <div class="grid-3">
+      <article class="panel amber"><h3>Deferral branch</h3><p>From the confirmed queue, Dispatch records a reason and impact, then Store sees the consequence.</p></article>
+      <article class="panel amber"><h3>Loading branch</h3><p>A missing, damaged, or mismatched shipment pauses until the loader records a resolution.</p></article>
+      <article class="panel amber"><h3>Delivery branch</h3><p>A failed stop stays outstanding for a return visit and never counts as a completed delivery.</p></article>
+    </div>
+    <footer class="page-footer"><span>Relay | Workflow overview</span><span class="page-number"></span></footer>
+  </section>
+
+  <section class="page screen-page">
+    <header class="page-header"><span>Relay screen flows</span><span>01 | Store manager</span></header>
+    <span class="eyebrow">Store manager | Screen 01</span>
+    <h2>Order replenishment</h2>
+    <figure class="screenshot">
+      <img src="screenshots/store_order_replenishment.png" alt="Relay Store replenishment screen showing inventory, stock health, suggested quantities, order summary, and cutoff.">
+      <figcaption><span>Inventory and a full-carton draft for OUT006.</span><span>Store manager | Order replenishment</span></figcaption>
+    </figure>
+    <div class="screen-meta">
+      <div><b>Purpose</b><p>Turn stock context into a confirmed next-day replenishment request.</p></div>
+      <div><b>Primary action</b><p>Use or adjust recommended cartons, review the order, then place it.</p></div>
+      <div><b>Important information</b><p>On hand, stock health, days of cover, suggestions, weight, window, cutoff, and depot.</p></div>
+    </div>
+    <div class="callout"><b>Rationale</b><p>Stock health, full-carton suggestions and the 16:00 cutoff help a counter manager choose quantities quickly without a separate spreadsheet.</p></div>
+    <footer class="page-footer"><span>Relay | Store manager | Order replenishment</span><span class="page-number"></span></footer>
+  </section>
+
+  <section class="page screen-page">
+    <header class="page-header"><span>Relay screen flows</span><span>02 | Store manager</span></header>
+    <span class="eyebrow">Store manager | Screen 02</span>
+    <h2>Order tracking &amp; ETA</h2>
+    <figure class="screenshot">
+      <img src="screenshots/store_order_tracking_eta.png" alt="Relay Store tracking screen showing order status, expected arrival, window, route, and vehicle.">
+      <figcaption><span>The same OUT006 order after Dispatch assigns R-07 and VEH003.</span><span>Store manager | Order tracking &amp; ETA</span></figcaption>
+    </figure>
+    <div class="screen-meta">
+      <div><b>Purpose</b><p>Give the outlet a dependable view of what Dispatch has planned.</p></div>
+      <div><b>Primary action</b><p>Track the order and open details when more context is needed.</p></div>
+      <div><b>Important information</b><p>Lifecycle, expected arrival, delivery window, route, vehicle, driver, and exception state.</p></div>
+    </div>
+    <div class="callout"><b>Rationale</b><p>Order status, calculated arrival, delivery window and vehicle help the outlet prepare staff and space for the expected handoff.</p></div>
+    <footer class="page-footer"><span>Relay | Store manager | Order tracking &amp; ETA</span><span class="page-number"></span></footer>
+  </section>
+
+  <section class="page screen-page">
+    <header class="page-header"><span>Relay screen flows</span><span>03 | Store manager</span></header>
+    <span class="eyebrow">Store manager | Screen 03</span>
+    <h2>Receipt check</h2>
+    <figure class="screenshot">
+      <img src="screenshots/store_receipt_check.png" alt="Relay Store receipt screen showing driver proof of delivery, confirm receipt, and report issue actions.">
+      <figcaption><span>Driver POD is visible before the Store manager accepts the stock.</span><span>Store manager | Receipt check</span></figcaption>
+    </figure>
+    <div class="screen-meta">
+      <div><b>Purpose</b><p>Separate driver delivery from the Store manager's confirmation of what arrived.</p></div>
+      <div><b>Primary action</b><p>Confirm receipt after checking cartons, or report an issue.</p></div>
+      <div><b>Important information</b><p>Delivered cartons, recipient, time, POD state, receipt confirmation, and issue record.</p></div>
+    </div>
+    <div class="callout"><b>Rationale</b><p>Driver POD sits beside Confirm receipt and Report an issue, so the outlet can check cartons and record a discrepancy at the counter.</p></div>
+    <footer class="page-footer"><span>Relay | Store manager | Receipt check</span><span class="page-number"></span></footer>
+  </section>
+
+  <section class="page screen-page">
+    <header class="page-header"><span>Relay screen flows</span><span>04 | Dispatcher</span></header>
+    <span class="eyebrow">Dispatcher | Screen 04</span>
+    <h2>Confirmed order queue</h2>
+    <figure class="screenshot">
+      <img src="screenshots/dispatcher_order_queue.png" alt="Relay Dispatcher screen showing confirmed orders, outlets, windows, cartons, temperature, and access conditions.">
+      <figcaption><span>Confirmed and priority orders beside the current R-07 plan.</span><span>Dispatcher | Confirmed order queue</span></figcaption>
+    </figure>
+    <div class="screen-meta">
+      <div><b>Purpose</b><p>Bring the orders that need a decision into one planning queue.</p></div>
+      <div><b>Primary action</b><p>Select an order, then assign it or record a deferral.</p></div>
+      <div><b>Important information</b><p>Outlet, window, cartons, weight, volume, temperature, access, last service, and repeat-skip risk.</p></div>
+    </div>
+    <div class="callout"><b>Rationale</b><p>Orders, windows and service risk appear together so a planner at a large screen can choose the next assignment.</p></div>
+    <footer class="page-footer"><span>Relay | Dispatcher | Confirmed order queue</span><span class="page-number"></span></footer>
+  </section>
+
+  <section class="page screen-page">
+    <header class="page-header"><span>Relay screen flows</span><span>05 | Dispatcher</span></header>
+    <span class="eyebrow">Dispatcher | Screen 05</span>
+    <h2>Plan &amp; validate</h2>
+    <figure class="screenshot">
+      <img src="screenshots/dispatcher_plan_validate.png" alt="Relay Dispatcher planning screen showing R-07 stop sequence, route metrics, feasibility checks, and VEH003 capacity.">
+      <figcaption><span>R-07 Fresh in Colombo with route and vehicle evidence together.</span><span>Dispatcher | Plan &amp; validate</span></figcaption>
+    </figure>
+    <div class="screen-meta">
+      <div><b>Purpose</b><p>Validate the route and selected vehicle before the manifest is released.</p></div>
+      <div><b>Primary action</b><p>Review all checks, confirm the plan, then release it to Bay 03.</p></div>
+      <div><b>Important information</b><p>Stop sequence, ETA, windows, distance, time, cartons, temperature, access, weight, volume, fuel, trips, and depot.</p></div>
+    </div>
+    <div class="callout"><b>Rationale</b><p>Stop sequence, vehicle and seven checks expose an infeasible plan together on the dispatcher's large screen before release.</p></div>
+    <footer class="page-footer"><span>Relay | Dispatcher | Plan &amp; validate</span><span class="page-number"></span></footer>
+  </section>
+
+  <section class="page screen-page">
+    <header class="page-header"><span>Relay screen flows</span><span>06 | Dispatcher</span></header>
+    <span class="eyebrow">Dispatcher | Screen 06</span>
+    <h2>Deferral decision</h2>
+    <figure class="screenshot">
+      <img src="screenshots/dispatcher_deferral.png" alt="Relay deferral dialog with selected order, reason, and impact and next action fields.">
+      <figcaption><span>A repeat skip requires both a reason and a concrete next action.</span><span>Dispatcher | Deferral decision</span></figcaption>
+    </figure>
+    <div class="screen-meta">
+      <div><b>Purpose</b><p>Create a traceable decision when the current run cannot serve an order.</p></div>
+      <div><b>Primary action</b><p>Choose the reason, write the impact and next action, then record the deferral.</p></div>
+      <div><b>Important information</b><p>Order, outlet, window, days since service, previous skip, deferral reason, and protection for the next run.</p></div>
+    </div>
+    <div class="callout"><b>Rationale</b><p>A reason and impact note make a skipped outlet visible and defensible at the planning desk when this run cannot serve it.</p></div>
+    <footer class="page-footer"><span>Relay | Dispatcher | Deferral decision</span><span class="page-number"></span></footer>
+  </section>
+
+  <section class="page screen-page">
+    <header class="page-header"><span>Relay screen flows</span><span>07 | Dispatcher</span></header>
+    <span class="eyebrow">Dispatcher | Screen 07</span>
+    <h2>Delivery &amp; receipt follow-up</h2>
+    <figure class="screenshot">
+      <img src="screenshots/dispatcher_followup.png" alt="Relay Dispatcher completed route showing delivery receipts and a Store receipt issue for follow-up.">
+      <figcaption><span>Completed delivery remains complete while the Store issue is identified for reconciliation.</span><span>Dispatcher | Delivery &amp; receipt follow-up</span></figcaption>
+    </figure>
+    <div class="screen-meta">
+      <div><b>Purpose</b><p>Review completed delivery records and separate receipt follow-up from route completion.</p></div>
+      <div><b>Primary action</b><p>Open a delivered stop and inspect the driver POD and Store receipt issue.</p></div>
+      <div><b>Important information</b><p>Route completion, delivered time, recipient, outstanding delivery exception, receipt confirmation, and Store issue.</p></div>
+    </div>
+    <div class="callout"><b>Rationale</b><p>The dispatch overview keeps delivered stops complete while identifying the order, outlet and receipt discrepancy for reconciliation.</p></div>
+    <footer class="page-footer"><span>Relay | Dispatcher | Delivery &amp; receipt follow-up</span><span class="page-number"></span></footer>
+  </section>
+
+  <section class="page screen-page">
+    <header class="page-header"><span>Relay screen flows</span><span>08 | Loader</span></header>
+    <span class="eyebrow">Loader | Screen 08</span>
+    <h2>Loading manifest</h2>
+    <figure class="screenshot tablet">
+      <img src="screenshots/loader_manifest.png" alt="Relay Loader tablet screen showing vehicle, bay, departure, reverse loading sequence, and shipment cartons.">
+      <figcaption><span>The last delivery stop is presented first for loading.</span><span>Loader | Loading manifest</span></figcaption>
+    </figure>
+    <div class="screen-meta">
+      <div><b>Purpose</b><p>Turn the released route into an unambiguous loading sequence.</p></div>
+      <div><b>Primary action</b><p>Check the current shipment and confirm it loaded before moving forward.</p></div>
+      <div><b>Important information</b><p>Vehicle, bay, driver, departure, temperature, stop number, order, products, cartons, and weight.</p></div>
+    </div>
+    <div class="callout"><b>Rationale</b><p>Reverse stop order and carton counts guide fast loading on a shared warehouse tablet without burying the next shipment.</p></div>
+    <footer class="page-footer"><span>Relay | Loader | Loading manifest</span><span class="page-number"></span></footer>
+  </section>
+
+  <section class="page screen-page">
+    <header class="page-header"><span>Relay screen flows</span><span>09 | Loader</span></header>
+    <span class="eyebrow">Loader | Screen 09</span>
+    <h2>Loading exception</h2>
+    <figure class="screenshot tablet">
+      <img src="screenshots/loader_exception.png" alt="Relay Loader exception dialog for a missing or damaged shipment.">
+      <figcaption><span>The shipment pauses before it leaves the bay.</span><span>Loader | Loading exception</span></figcaption>
+    </figure>
+    <div class="screen-meta">
+      <div><b>Purpose</b><p>Stop a short, damaged, or mismatched shipment and preserve the reason.</p></div>
+      <div><b>Primary action</b><p>Select what happened, add useful detail, save the issue, and later record a resolution.</p></div>
+      <div><b>Important information</b><p>Order, exception type, affected products or cartons, dock guidance, and resolution note.</p></div>
+    </div>
+    <div class="callout"><b>Rationale</b><p>A blocked shipment and resolution note let dock staff stop a short or damaged load before it leaves the bay.</p></div>
+    <footer class="page-footer"><span>Relay | Loader | Loading exception</span><span class="page-number"></span></footer>
+  </section>
+
+  <section class="page screen-page">
+    <header class="page-header"><span>Relay screen flows</span><span>10 | Driver</span></header>
+    <span class="eyebrow">Driver | Screen 10</span>
+    <h2>Next stop</h2>
+    <figure class="screenshot phone">
+      <img src="screenshots/driver_next_stop.png" alt="Relay Driver phone screen showing the next stop, window, address, shipment, and primary arrival action.">
+      <figcaption><span>One current stop and one prominent next action.</span><span>Driver | Next stop</span></figcaption>
+    </figure>
+    <div class="screen-meta">
+      <div><b>Purpose</b><p>Keep the driver's immediate route work understandable on a phone.</p></div>
+      <div><b>Primary action</b><p>Navigate or contact the Store, then record arrival when safely stopped.</p></div>
+      <div><b>Important information</b><p>Route progress, current outlet, window, address, order, cartons, weight, and connection state.</p></div>
+    </div>
+    <div class="callout"><b>Rationale</b><p>The current stop, window, contact and next action stay prominent on a phone used only while safely stopped.</p></div>
+    <footer class="page-footer"><span>Relay | Driver | Next stop</span><span class="page-number"></span></footer>
+  </section>
+
+  <section class="page screen-page">
+    <header class="page-header"><span>Relay screen flows</span><span>11 | Driver</span></header>
+    <span class="eyebrow">Driver | Screen 11</span>
+    <h2>Delivery exception</h2>
+    <figure class="screenshot phone">
+      <img src="screenshots/driver_exception.png" alt="Relay Driver delivery exception dialog with reason, details, and return-later action.">
+      <figcaption><span>A closed Store remains an outstanding stop for a return visit.</span><span>Driver | Delivery exception</span></figcaption>
+    </figure>
+    <div class="screen-meta">
+      <div><b>Purpose</b><p>Record a failed handoff without making the shipment look delivered.</p></div>
+      <div><b>Primary action</b><p>Select the problem, add detail, then save it for a later return.</p></div>
+      <div><b>Important information</b><p>Exception reason, contact or quantity detail, retained cartons, next step, and outstanding status.</p></div>
+    </div>
+    <div class="callout"><b>Rationale</b><p>A reason, details and return-visit path keep an undelivered stop visible when access or goods prevent handoff.</p></div>
+    <footer class="page-footer"><span>Relay | Driver | Delivery exception</span><span class="page-number"></span></footer>
+  </section>
+
+  <section class="page screen-page">
+    <header class="page-header"><span>Relay screen flows</span><span>12 | Driver</span></header>
+    <span class="eyebrow">Driver | Screen 12</span>
+    <h2>Proof of delivery</h2>
+    <figure class="screenshot phone">
+      <img src="screenshots/driver_pod.png" alt="Relay Driver proof of delivery sheet with expected cartons, verification, recipient, delivery time, and confirmation action.">
+      <figcaption><span>The driver cannot complete delivery without the full receipt record.</span><span>Driver | Proof of delivery</span></figcaption>
+    </figure>
+    <div class="screen-meta">
+      <div><b>Purpose</b><p>Create the delivery record that Store and Dispatch can inspect.</p></div>
+      <div><b>Primary action</b><p>Verify the carton count, confirm the check, enter recipient and time, then complete delivery.</p></div>
+      <div><b>Important information</b><p>Expected cartons, handed-over cartons, verification, recipient, delivery time, and offline queue status.</p></div>
+    </div>
+    <div class="callout"><b>Rationale</b><p>Carton verification, recipient and time create a clear delivery record on the phone for Store and Dispatch to inspect.</p></div>
+    <footer class="page-footer"><span>Relay | Driver | Proof of delivery</span><span class="page-number"></span></footer>
+  </section>
+</main>
+</body>
+</html>

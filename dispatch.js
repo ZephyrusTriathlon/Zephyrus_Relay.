@@ -101,8 +101,7 @@ function routeSummary(route=dispatchRouteState()) {
 function dispatchPrimaryAction(route) {
   if(route.key==='planning')return `<button class="btn primary" data-action="confirm-dispatch" ${state.offline||!route.total?'disabled':''}>${icon('check')} Confirm plan</button>`;
   if(route.completed)return `<button class="btn primary" data-action="route-review">${icon('check')} View receipts</button>`;
-  const field=state.started||state.ready||route.key==='transit'||route.key==='partial';
-  return `<button class="btn primary" data-role="${field?'delivery':'loader'}">${icon(route.issues.length?'warning':field?'truck':'box')} ${route.issues.length?'Review exceptions':field?'Open delivery':'Open warehouse'}</button>`;
+  return '';
 }
 
 function dispatchView() {
@@ -125,7 +124,7 @@ function dispatchView() {
       <div class="route-workspace" id="planning-route"><div class="route-heading"><div><div class="eyebrow">R-07 · Trip 1 · Fresh</div><h2>Colombo</h2></div>${dispatchStatus(route)}</div>${route.completed||route.issues.length?routeSummary(route):planningMap()}<div class="route-strip"><span><b>${route.total}</b> stops</span><span><b>${routeMetrics().km}</b> km est.</span><span><b>${assigned().reduce((sum,o)=>sum+o.cartons,0)}</b> cartons</span><span><b>${totalVolume().toFixed(2)}</b> m³</span></div><div class="constraint-grid" aria-label="Operating constraint checks">${planChecks().map(([label,value,pass])=>`<div class="constraint-check ${pass?'pass':'fail'}"><span>${icon(pass?'check':'warning')}</span><div><b>${label}</b><small>${value}</small></div></div>`).join('')}</div><div class="route-sequence-label"><span>${route.completed?'DELIVERY RECEIPTS':'STOP SEQUENCE'}</span><span>${route.completed?'DELIVERED AT':'ETA / WINDOW'}</span></div><div class="route-list">${routeStops(true)}</div>${!route.total?'<div class="empty"><h3>Build your first stop</h3><p>Assign an order from the queue.</p></div>':''}${!state.confirmed?'<button class="route-drop" data-action="planning-panel" data-panel="queue">＋ Add an order from the queue</button>':''}${!route.completed&&!route.issues.length?routeSummary(route):''}</div>
       <aside class="context" id="planning-vehicle">${vehicleContext()}</aside>
     </section>
-    <div class="bottom-note"><span class="row"><span class="dot"></span>R-07 · ${route.label}${route.completedAt?` at ${esc(route.completedAt)}`:''} · Saved ${state.lastSync}</span><span>Source-aligned synthetic records · Planning estimates are illustrative</span></div>`;
+    <div class="bottom-note"><span class="row"><span class="dot"></span>R-07 · ${route.label}${route.completedAt?` at ${esc(route.completedAt)}`:''} · Saved ${state.lastSync}</span></div>`;
 }
 
 function queueCards() {

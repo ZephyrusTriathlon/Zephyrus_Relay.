@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Four role personas for the Relay Designathon submission.">
+  <title>Relay Personas</title>
+  <link rel="stylesheet" href="designathon.css">
+</head>
+<body>
+<main class="document">
+  <section class="page persona-page">
+    <header class="page-header"><span>Relay personas</span><span>Dispatcher</span></header>
+    <div class="persona-title">
+      <div class="persona-monogram" aria-hidden="true">DF</div>
+      <div><span class="eyebrow">Dispatcher</span><h1>Dinuka Fernando</h1><p>Plans from the Peliyagoda office on a large screen with stable connectivity.</p></div>
+    </div>
+
+    <dl class="persona-facts">
+      <div><dt>Primary responsibility</dt><dd>Build a feasible daily plan from confirmed orders, available vehicles, outlet restrictions, and delivery windows. Record which orders are served or deferred.</dd></div>
+      <div><dt>Working context</dt><dd>Uses a large planning screen. The existing process depends on spreadsheets, network knowledge, calls, dock conversations, and printed run sheets.</dd></div>
+    </dl>
+
+    <div class="grid-2">
+      <article class="panel"><h3>Goals</h3><ul><li>Bring confirmed orders into one queue.</li><li>Allocate a feasible vehicle and trip.</li><li>Protect time-sensitive and constrained deliveries.</li><li>Explain every deferral and avoid repeated skips.</li><li>See route progress and delivery problems.</li><li>Discuss future vehicle, driver, and refrigerated capacity.</li></ul></article>
+      <article class="panel"><h3>Current pain points</h3><ul><li>Planning depends heavily on one person's knowledge.</li><li>Outlet restrictions and vehicle capability are easy to separate from the decision.</li><li>Printed plans can become stale after release.</li><li>Progress and problems return through separate calls.</li><li>Deferrals can lack a durable reason and consequence.</li></ul></article>
+      <article class="panel"><h3>Information needed</h3><ul><li>Order, outlet, window, temperature, access, and previous service risk</li><li>Vehicle weight, volume, temperature capability, depot, fuel quota, and trips</li><li>Stop sequence, projected arrival, and route time</li><li>Loading status, delivery outcomes, POD, and Store receipt issues</li></ul></article>
+      <article class="panel green"><h3>What Relay helps accomplish</h3><p>Relay places queue, route, selected vehicle, and visible validation in one planning workspace. It requires a reason and impact note for a deferral, releases one manifest to the loader, and carries delivery and receipt follow-up back into Dispatch.</p></article>
+    </div>
+
+    <div class="callout"><b>Design implications</b><p>Use the desktop width to keep the decision and its evidence together. Keep constraints readable, block infeasible assignments with a reason, and preserve dispatcher control instead of hiding it behind automatic allocation.</p></div>
+    <footer class="page-footer"><span>Relay | Persona 1 of 4</span><span class="page-number"></span></footer>
+  </section>
+
+  <section class="page persona-page">
+    <header class="page-header"><span>Relay personas</span><span>Loader</span></header>
+    <div class="persona-title">
+      <div class="persona-monogram" aria-hidden="true">KS</div>
+      <div><span class="eyebrow">Loader</span><h1>Kasun Silva</h1><p>Works at the Peliyagoda or Kandy warehouse dock on a shared tablet or terminal.</p></div>
+    </div>
+
+    <dl class="persona-facts">
+      <div><dt>Primary responsibility</dt><dd>Prepare the released route for departure, load in the order that supports unloading, and stop a missing, damaged, or mismatched shipment before the vehicle leaves.</dd></div>
+      <div><dt>Working context</dt><dd>Works in a busy loading area. Printed loading lists can become outdated when Dispatch changes the plan.</dd></div>
+    </dl>
+
+    <div class="grid-2">
+      <article class="panel"><h3>Goals</h3><ul><li>Receive the final released manifest.</li><li>Understand vehicle, bay, driver, and temperature class.</li><li>Load the last delivery stop deepest in the vehicle.</li><li>Check cartons and product lines.</li><li>Flag and resolve a short or damaged shipment before departure.</li><li>Complete work even when connectivity drops.</li></ul></article>
+      <article class="panel"><h3>Current pain points</h3><ul><li>A printed list may not reflect the latest plan.</li><li>Stop order can be separated from loading order.</li><li>A shortfall may be reported after the vehicle has left.</li><li>Issue resolution can remain verbal and difficult to trace.</li><li>A shared device needs a clear next action.</li></ul></article>
+      <article class="panel"><h3>Information needed</h3><ul><li>Released route, vehicle, bay, driver, departure, and temperature class</li><li>Reverse stop order and the next shipment to load</li><li>Order, outlet, cartons, weight, and product lines</li><li>Issue type, detail, resolution, and synchronization status</li></ul></article>
+      <article class="panel green"><h3>What Relay helps accomplish</h3><p>Relay turns the released stop sequence into a numbered reverse-loading manifest. It blocks out-of-sequence confirmation, gives each shipment a product checklist, and requires a resolution note before a flagged shipment can continue.</p></article>
+    </div>
+
+    <div class="callout"><b>Design implications</b><p>Keep the next shipment visually dominant and touch targets suitable for a shared tablet. Show progress without burying the sequence. Preserve loading and issue actions locally when offline.</p></div>
+    <footer class="page-footer"><span>Relay | Persona 2 of 4</span><span class="page-number"></span></footer>
+  </section>
+
+  <section class="page persona-page">
+    <header class="page-header"><span>Relay personas</span><span>Driver</span></header>
+    <div class="persona-title">
+      <div class="persona-monogram" aria-hidden="true">AP</div>
+      <div><span class="eyebrow">Driver</span><h1>Amal Perera</h1><p>Works on the road using a personal phone and interacts only while safely stopped.</p></div>
+    </div>
+
+    <dl class="persona-facts">
+      <div><dt>Primary responsibility</dt><dd>Follow the route, record arrival and delivery outcomes, keep exceptions outstanding, and create proof of delivery that Store and Dispatch can inspect.</dd></div>
+      <div><dt>Working context</dt><dd>Uses a phone away from the depot. Mobile coverage can drop in hill country, along the Kandy corridor, and in rural districts.</dd></div>
+    </dl>
+
+    <div class="grid-2">
+      <article class="panel"><h3>Goals</h3><ul><li>Know the current stop and the next safe action.</li><li>See the window, address, contact action, and shipment.</li><li>Record arrival and delivery exceptions.</li><li>Return to an outstanding stop after conditions change.</li><li>Verify cartons, recipient, and delivery time.</li><li>Continue recording work during a connection loss.</li></ul></article>
+      <article class="panel"><h3>Current pain points</h3><ul><li>Paper run sheets cannot reflect changes.</li><li>Instructions and problems move through calls.</li><li>Proof can depend on memory or handwritten notes.</li><li>Coverage loss can interrupt record keeping.</li><li>A deferred stop can be mistaken for a completed route.</li></ul></article>
+      <article class="panel"><h3>Information needed</h3><ul><li>Current stop, route progress, window, outlet, and address</li><li>Carton count, product lines, and shipment weight</li><li>Exception types, next step, and return-visit status</li><li>Offline status, last sync, and pending updates</li><li>Required POD fields and confirmation result</li></ul></article>
+      <article class="panel green"><h3>What Relay helps accomplish</h3><p>Relay gives the driver one current stop with a primary action above phone navigation. Exceptions remain open for a return visit. POD requires the full carton count, verification, recipient, and time. Offline work is retained in the prototype's local queue.</p></article>
+    </div>
+
+    <div class="callout"><b>Design implications</b><p>Use a phone-first layout, one prominent next action, large controls, and explicit outstanding-stop language. Never describe a route with deferred stops as complete. Make connection state and recovery understandable without blocking safe work.</p></div>
+    <footer class="page-footer"><span>Relay | Persona 3 of 4</span><span class="page-number"></span></footer>
+  </section>
+
+  <section class="page persona-page">
+    <header class="page-header"><span>Relay personas</span><span>Store manager</span></header>
+    <div class="persona-title">
+      <div class="persona-monogram" aria-hidden="true">NP</div>
+      <div><span class="eyebrow">Store manager</span><h1>Nimasha Perera</h1><p>Works at the outlet counter using a desktop or phone.</p></div>
+    </div>
+
+    <dl class="persona-facts">
+      <div><dt>Primary responsibility</dt><dd>Place next-day replenishment before the cutoff, prepare the receiving team for arrival, inspect what was delivered, and confirm or report the receipt outcome.</dd></div>
+      <div><dt>Working context</dt><dd>Balances ordering and receiving with counter work. Orders currently move through calls or messages without clear confirmation that they were received or scheduled.</dd></div>
+    </dl>
+
+    <div class="grid-2">
+      <article class="panel"><h3>Goals</h3><ul><li>See stock health and practical full-carton suggestions.</li><li>Submit before the 16:00 cutoff.</li><li>Know that Dispatch received the order.</li><li>See expected arrival, window, route, and vehicle.</li><li>Understand a deferral or delivery exception.</li><li>Inspect the driver's POD, confirm receipt, or report an issue.</li></ul></article>
+      <article class="panel"><h3>Current pain points</h3><ul><li>A phone or message does not guarantee scheduling visibility.</li><li>Arrival information may be too late to schedule receiving staff.</li><li>A deferral can arrive without a clear reason or next step.</li><li>Proof and issue reporting are separated from the order.</li><li>Received stock should not update before a store check.</li></ul></article>
+      <article class="panel"><h3>Information needed</h3><ul><li>On-hand cartons, stock health, suggestions, and incoming stock</li><li>Cutoff, requested day, and delivery window</li><li>Order status, expected arrival, route, vehicle, and driver</li><li>Delivered cartons, recipient, time, receipt confirmation, and issue record</li></ul></article>
+      <article class="panel green"><h3>What Relay helps accomplish</h3><p>Relay combines stock health, recommendations, order review, and tracking. The same order gains route and ETA detail after planning, then shows the driver's POD beside Confirm receipt and Report an issue. Stock updates only after Store confirmation.</p></article>
+    </div>
+
+    <div class="callout"><b>Design implications</b><p>Keep ordering understandable at the counter, make the cutoff and carton unit explicit, and separate driver delivery from Store receipt. Explain deferral and exception states in plain operational language.</p></div>
+    <footer class="page-footer"><span>Relay | Persona 4 of 4</span><span class="page-number"></span></footer>
+  </section>
+</main>
+</body>
+</html>

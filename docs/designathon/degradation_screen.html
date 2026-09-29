@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Relay degradation scenario: connection lost during delivery.">
+  <title>Relay Degradation Scenario</title>
+  <link rel="stylesheet" href="designathon.css">
+</head>
+<body>
+<main class="document">
+  <section class="page">
+    <header class="page-header"><span>Relay degradation screen</span><span>Scenario</span></header>
+    <span class="eyebrow">Named degradation scenario</span>
+    <h1>Connection lost during delivery</h1>
+    <p class="lede">A driver loses mobile connectivity while executing the route. The work cannot disappear, and the route cannot become ambiguous.</p>
+
+    <p>Mobile coverage can drop across hill country, the Kandy corridor, and rural districts. The driver still needs to record arrivals, exceptions, carton checks, and proof of delivery while safely stopped. Relay keeps those actions available in its simulated local state, identifies what is waiting to synchronize, and preserves outstanding stops.</p>
+
+    <div class="flow-stack" aria-label="Connection loss and recovery flow">
+      <div class="flow-node"><b>Connected</b><small>The route and most recent synchronization state are visible.</small></div>
+      <div class="flow-link"></div>
+      <div class="flow-node"><b>Connection lost</b><small>The Driver workspace shows an offline banner and pending-update count.</small></div>
+      <div class="flow-link"></div>
+      <div class="flow-node"><b>Continue work locally</b><small>Safe delivery actions remain available on this device.</small></div>
+      <div class="flow-link"></div>
+      <div class="flow-node"><b>Updates queued</b><small>The count and last-sync time explain what has not reconciled.</small></div>
+      <div class="flow-link"></div>
+      <div class="flow-node"><b>Connection restored</b><small>The simulation clears the queue and confirms the team is current.</small></div>
+    </div>
+
+    <div class="callout amber"><b>Design intent</b><p>The degraded state is visible without replacing the driver's current stop. Connectivity changes the status of the record, not the driver's ability to understand the route.</p></div>
+    <footer class="page-footer"><span>Relay | Connection lost during delivery</span><span class="page-number"></span></footer>
+  </section>
+
+  <section class="page degradation-evidence degradation-offline">
+    <header class="page-header"><span>Relay degradation screen</span><span>Degraded state</span></header>
+    <span class="eyebrow">Degraded state</span>
+    <h2>Offline, with the current stop still usable.</h2>
+    <figure class="screenshot phone">
+      <img src="screenshots/driver_offline.png" alt="Relay Driver workspace showing connection lost, pending updates, and the current delivery stop.">
+      <figcaption><span>Actual Relay phone viewport with the simulated offline state active.</span><span>Driver | Offline</span></figcaption>
+    </figure>
+
+    <div class="grid-2">
+      <article class="panel green"><h3>What remains usable</h3><ul class="compact-list"><li>Current route and next stop</li><li>Arrival recording</li><li>Delivery exceptions</li><li>Receipt details and carton checks</li><li>Loading and issue actions in the Loader view</li></ul></article>
+      <article class="panel amber"><h3>What the user sees</h3><ul class="compact-list"><li>Connection lost label</li><li>Pending-update count</li><li>Last synchronization time</li><li>Local-save language</li><li>Outstanding route progress</li></ul></article>
+      <article class="panel"><h3>What is queued</h3><p>The prototype adds recorded actions to its local pending array while offline. The exact item count updates as the driver works.</p></article>
+      <article class="panel"><h3>What is protected</h3><p>Dispatch route changes remain unavailable while offline. Relay does not suggest that a remote plan can be safely changed without connectivity.</p></article>
+    </div>
+    <footer class="page-footer"><span>Relay | Degraded state</span><span class="page-number"></span></footer>
+  </section>
+
+  <section class="page degradation-evidence degradation-recovery">
+    <header class="page-header"><span>Relay degradation screen</span><span>Recovery state</span></header>
+    <span class="eyebrow">Recovery state</span>
+    <h2>Connection restored, queued updates reconciled in the demo.</h2>
+    <figure class="screenshot phone">
+      <img src="screenshots/driver_reconnected.png" alt="Relay Driver workspace showing the recovery message after reconnecting.">
+      <figcaption><span>Actual Relay phone viewport immediately after the simulated reconnect action.</span><span>Driver | Reconnected</span></figcaption>
+    </figure>
+
+    <div class="grid-2">
+      <article class="panel green"><h3>Recovery feedback</h3><p>The offline banner disappears, the pending count returns to zero, and a confirmation message states that queued updates were synchronized in the demo workspace.</p></article>
+      <article class="panel"><h3>Continuity</h3><p>The current route and stop remain in place. Recovery does not force the driver into another screen or hide remaining work.</p></article>
+    </div>
+
+    <div class="callout amber">
+      <b>Prototype simulation, not a production sync system</b>
+      <p>Relay stores its state in localStorage and clears a simulated pending array on reconnect. It does not implement a backend queue, service worker, cross-device reconciliation, conflict handling, retries, or production data durability.</p>
+    </div>
+    <footer class="page-footer"><span>Relay | Recovery state</span><span class="page-number"></span></footer>
+  </section>
+
+  <section class="page">
+    <header class="page-header"><span>Relay degradation screen</span><span>Why this scenario</span></header>
+    <span class="eyebrow">Why this scenario</span>
+    <h2>Connectivity loss crosses every field handoff.</h2>
+    <p class="lede">The Challenge Booklet requires work away from the depot to remain usable offline and records to reconcile when connectivity returns.</p>
+
+    <div class="grid-2">
+      <article class="panel"><h3>Operational relevance</h3><p>The driver is already away from the planning office and warehouse. Losing a connection should not erase the route context, prevent a safely stopped driver from recording the delivery, or make an outstanding stop look complete.</p></article>
+      <article class="panel"><h3>Shared record</h3><p>Arrival, exception, and POD information later becomes useful to Store and Dispatch. The degraded state makes clear that the record is local and pending before other roles can rely on it.</p></article>
+      <article class="panel"><h3>Safe restraint</h3><p>The prototype keeps field actions available but protects route changes. It does not imply that every planning action is safe without a connection.</p></article>
+      <article class="panel"><h3>Clear recovery</h3><p>A count that returns to zero and a specific recovery message give the driver a clear endpoint. Outstanding deliveries still remain visible after reconnection.</p></article>
+    </div>
+
+    <div class="rule"></div>
+    <h3>Actual limitations</h3>
+    <ul>
+      <li>The offline control is a deliberate simulation.</li>
+      <li>State persists only in this browser and on this device.</li>
+      <li>No network request is queued or sent.</li>
+      <li>No server confirms receipt of a synchronized update.</li>
+      <li>No conflict is possible because the prototype has no cross-device state.</li>
+    </ul>
+
+    <p class="source-note">Grounded in the implemented Driver and Loader workspaces and the official Challenge Booklet connectivity requirement.</p>
+    <footer class="page-footer"><span>Relay | Scenario rationale and boundary</span><span class="page-number"></span></footer>
+  </section>
+</main>
+</body>
+</html>

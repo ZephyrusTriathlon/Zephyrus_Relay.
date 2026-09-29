@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Standalone Relay Designathon case study for Waypoint Group delivery operations.">
+  <title>Relay Designathon Case Study</title>
+  <link rel="stylesheet" href="designathon.css">
+</head>
+<body>
+<main class="document">
+  <section class="page">
+    <div class="cover">
+      <div>
+        <span class="cover-mark" aria-hidden="true">&#8644;</span>
+      </div>
+      <div>
+        <span class="eyebrow">Tech-Triathlon 2026 | Designathon case study</span>
+        <h1>Relay connects every handoff.</h1>
+        <p class="subtitle">A source-aligned case study for Waypoint Group's shared delivery network.</p>
+      </div>
+      <div class="cover-meta">
+        <div><b>System</b><span>Relay delivery operations prototype</span></div>
+        <div><b>Team</b><span>Zephyrus</span></div>
+        <div><b>Workflow</b><span>Order &rarr; Plan &rarr; Load &rarr; Deliver &rarr; Confirm receipt</span></div>
+        <div><b>Scope</b><span>Four connected roles, one complete Fresh trip</span></div>
+      </div>
+    </div>
+    <footer class="page-footer"><span>Relay | Standalone case study</span><span class="page-number"></span></footer>
+  </section>
+
+  <section class="page">
+    <header class="page-header"><span>Relay case study</span><span>Problem framing and scope</span></header>
+    <span class="eyebrow">Problem framing</span>
+    <h2>One network. Three brands. Too many disconnected decisions.</h2>
+    <p class="lede">Waypoint Fresh, Style, and Tech share 60 vehicles, two depots, and limited daily capacity. Orders are re-entered into spreadsheets, plans depend on one dispatcher's memory, loading lists become stale, and proof of delivery is fragmented across paper and calls.</p>
+    <p>Relay creates one explainable record from order confirmation through receipt. It prioritizes feasibility, role-to-role handoffs, and recovery when normal operations break down.</p>
+
+    <div class="workflow" aria-label="Relay workflow">
+      <div class="step"><b>Order</b><small>Store manager</small></div><span class="arrow">&rarr;</span>
+      <div class="step"><b>Plan</b><small>Dispatcher</small></div><span class="arrow">&rarr;</span>
+      <div class="step"><b>Load</b><small>Loader</small></div><span class="arrow">&rarr;</span>
+      <div class="step"><b>Deliver</b><small>Driver</small></div><span class="arrow">&rarr;</span>
+      <div class="step"><b>Confirm</b><small>Store manager</small></div>
+    </div>
+
+    <div class="grid-2">
+      <article class="panel green">
+        <h3>High-fidelity scope</h3>
+        <p>One complete Waypoint Fresh trip from Peliyagoda across all four roles, plus previews for Style and Tech. This slice makes the critical handoffs testable while the shared constraint model represents the wider network.</p>
+      </article>
+      <article class="panel">
+        <h3>Source boundary</h3>
+        <p>All records shown are synthetic. OUT001 to OUT120 and VEH001 to VEH060 follow the supplied dataset conventions. The confidential competition CSV files are not loaded into the browser.</p>
+      </article>
+    </div>
+
+    <div class="callout">
+      <b>Core tradeoff</b>
+      <p>Relay uses assisted planning with visible validation instead of a black-box auto-allocator. The dispatcher keeps control, while the system blocks infeasible weight, volume, refrigeration, access, depot, time, trip, fuel, and delivery-window choices.</p>
+    </div>
+    <footer class="page-footer"><span>Relay | Problem framing</span><span class="page-number"></span></footer>
+  </section>
+
+  <section class="page">
+    <header class="page-header"><span>Relay case study</span><span>Four user personas</span></header>
+    <span class="eyebrow">Four user personas</span>
+    <h2>Designed for where the work happens.</h2>
+    <p>One Relay application serves four distinct people. Each account has a fixed role and opens only its relevant workspace. Shared delivery state connects their work. Waypoint assigns roles, so public signup and role self-selection are intentionally absent. Switch demo account is a judge convenience, not employee navigation.</p>
+
+    <div class="grid-2">
+      <article class="panel">
+        <span class="role-tag">Dispatcher</span>
+        <h3>Dinuka Fernando</h3>
+        <p class="small">Large planning screen | stable connection</p>
+        <p>Needs a feasible plan, live progress, and a defensible record of deferrals.</p>
+      </article>
+      <article class="panel">
+        <span class="role-tag">Loader</span>
+        <h3>Kasun Silva</h3>
+        <p class="small">Shared warehouse tablet | busy loading dock</p>
+        <p>Needs the final stop sequence, reverse loading order, and a fast way to stop a short shipment.</p>
+      </article>
+      <article class="panel">
+        <span class="role-tag">Driver</span>
+        <h3>Amal Perera</h3>
+        <p class="small">Personal phone | safely stopped | unreliable coverage</p>
+        <p>Needs one clear next action, offline capture, proof of delivery, and return-visit recovery.</p>
+      </article>
+      <article class="panel">
+        <span class="role-tag">Store manager</span>
+        <h3>Nimasha Perera</h3>
+        <p class="small">Outlet counter | desktop or phone</p>
+        <p>Needs order confirmation, expected arrival, deferral notice, receipt confirmation, and issue visibility.</p>
+      </article>
+    </div>
+
+    <div class="callout amber">
+      <b>Connected responsibilities</b>
+      <p>A dispatcher's released plan becomes the loader's manifest. The loader's checks prepare the driver's route. The driver's receipt becomes information Store and Dispatch can inspect.</p>
+    </div>
+    <footer class="page-footer"><span>Relay | Personas</span><span class="page-number"></span></footer>
+  </section>
+
+  <section class="page">
+    <header class="page-header"><span>Relay case study</span><span>Connected screen flow</span></header>
+    <span class="eyebrow">Screen flow and rationale</span>
+    <h2>Store &rarr; Plan &rarr; Load &rarr; Deliver &rarr; Confirm.</h2>
+    <p>A change made by one role becomes the next role's trusted input. The prototype deliberately avoids separate, disconnected demos.</p>
+
+    <table aria-label="Store and Dispatcher screens">
+      <thead><tr><th>Role</th><th>Screen</th><th>Rationale</th></tr></thead>
+      <tbody>
+        <tr><td>Store manager</td><td>Order replenishment</td><td>Stock health, full-carton suggestions and the 16:00 cutoff help a counter manager choose quantities quickly without a separate spreadsheet.</td></tr>
+        <tr><td>Store manager</td><td>Order tracking &amp; ETA</td><td>Order status, calculated arrival, delivery window and vehicle help the outlet prepare staff and space for the expected handoff.</td></tr>
+        <tr><td>Store manager</td><td>Receipt check</td><td>Driver POD sits beside Confirm receipt and Report an issue, so the outlet can check cartons and record a discrepancy at the counter.</td></tr>
+        <tr><td>Dispatcher</td><td>Confirmed order queue</td><td>Orders, windows and service risk appear together so a planner at a large screen can choose the next assignment.</td></tr>
+        <tr><td>Dispatcher</td><td>Plan &amp; validate</td><td>Stop sequence, vehicle and seven checks expose an infeasible plan together on the dispatcher's large screen before release.</td></tr>
+        <tr><td>Dispatcher</td><td>Deferral decision</td><td>A reason and impact note make a skipped outlet visible and defensible at the planning desk when this run cannot serve it.</td></tr>
+        <tr><td>Dispatcher</td><td>Delivery &amp; receipt follow-up</td><td>The dispatch overview keeps delivered stops complete while identifying the order, outlet and receipt discrepancy for reconciliation.</td></tr>
+      </tbody>
+    </table>
+    <footer class="page-footer"><span>Relay | Screen rationales 1 of 2</span><span class="page-number"></span></footer>
+  </section>
+
+  <section class="page">
+    <header class="page-header"><span>Relay case study</span><span>Connected screen flow</span></header>
+    <span class="eyebrow">Screen flow and rationale</span>
+    <h2>Field screens keep the sequence clear.</h2>
+    <table aria-label="Loader and Driver screens">
+      <thead><tr><th>Role</th><th>Screen</th><th>Rationale</th></tr></thead>
+      <tbody>
+        <tr><td>Loader</td><td>Loading manifest</td><td>Reverse stop order and carton counts guide fast loading on a shared warehouse tablet without burying the next shipment.</td></tr>
+        <tr><td>Loader</td><td>Loading exception</td><td>A blocked shipment and resolution note let dock staff stop a short or damaged load before it leaves the bay.</td></tr>
+        <tr><td>Driver</td><td>Next stop</td><td>The current stop, window, contact and next action stay prominent on a phone used only while safely stopped.</td></tr>
+        <tr><td>Driver</td><td>Delivery exception</td><td>A reason, details and return-visit path keep an undelivered stop visible when access or goods prevent handoff.</td></tr>
+        <tr><td>Driver</td><td>Proof of delivery</td><td>Carton verification, recipient and time create a clear delivery record on the phone for Store and Dispatch to inspect.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="panel soft">
+      <h3>Flow priority</h3>
+      <p>Normal progress and exceptions use the same shared order lifecycle. A deferred driver stop remains outstanding. A driver POD does not update Store stock until the Store manager confirms receipt.</p>
+    </div>
+    <footer class="page-footer"><span>Relay | Screen rationales 2 of 2</span><span class="page-number"></span></footer>
+  </section>
+
+  <section class="page">
+    <header class="page-header"><span>Relay case study</span><span>Named degradation scenario</span></header>
+    <span class="eyebrow">Named degradation scenario</span>
+    <h2>Connection lost during delivery.</h2>
+    <p class="lede">The live example uses the Colombo route. Coverage loss is especially relevant in hill country, along the Kandy corridor and in rural districts. Field staff still need reliable carton checks, exceptions, arrivals, and receipts.</p>
+
+    <div class="flow-stack" aria-label="Offline recovery sequence">
+      <div class="flow-node"><b>Connected</b><small>Route and last synchronization state are visible.</small></div>
+      <div class="flow-link"></div>
+      <div class="flow-node"><b>Connection lost</b><small>The interface identifies offline status and pending work.</small></div>
+      <div class="flow-link"></div>
+      <div class="flow-node"><b>Continue locally</b><small>Loading, exception, arrival, and receipt actions remain usable in the prototype.</small></div>
+      <div class="flow-link"></div>
+      <div class="flow-node"><b>Connection restored</b><small>The simulated queue clears and confirms that updates are current.</small></div>
+    </div>
+
+    <div class="grid-2">
+      <article class="panel amber"><h3>Offline state</h3><p>On a driver's phone or loader's tablet, safe actions remain usable and a pending-update count shows what awaits synchronization. Route changes stay protected, and outstanding stops remain visible.</p></article>
+      <article class="panel green"><h3>Reconnected state</h3><p>When coverage returns, queued updates reconcile in the simulation and the count clears, giving field staff a clear sign that their saved work is current.</p></article>
+    </div>
+
+    <p class="source-note">Prototype boundary: offline work and synchronization are simulated with localStorage. Relay does not implement a service worker, backend queue, conflict resolution, or real cross-device synchronization.</p>
+    <footer class="page-footer"><span>Relay | Degradation</span><span class="page-number"></span></footer>
+  </section>
+
+  <section class="page">
+    <header class="page-header"><span>Relay case study</span><span>Decisions and prototype boundary</span></header>
+    <span class="eyebrow">Scope, domain rules and decisions</span>
+    <h2>Explainability before invisible automation.</h2>
+
+    <div class="decision-row"><b>Assisted planning</b><p>The dispatcher keeps control of the plan.</p><p>Visible checks block weight, volume, refrigeration, access, depot, time, trip, fuel, and delivery-window conflicts.</p></div>
+    <div class="decision-row"><b>Prioritization</b><p>Fresh windows, chilled capacity, van-only access, and repeat deferrals create high service risk.</p><p>The interface puts those conditions beside the decision rather than hiding them in a separate report.</p></div>
+    <div class="decision-row"><b>Reverse loading</b><p>The last delivery stop loads deepest.</p><p>The warehouse view numbers the manifest in loading order so unloading does not depend on a stale printout.</p></div>
+    <div class="decision-row"><b>Shared lifecycle</b><p>One order moves through all four workspaces.</p><p>Each role sees the status and information needed for its next handoff.</p></div>
+    <div class="decision-row"><b>Proof of delivery</b><p>Carton count, verification, recipient, and delivery time are explicit.</p><p>The Store manager can inspect the record before confirming receipt or reporting an issue.</p></div>
+    <div class="decision-row"><b>Future capacity</b><p>A 10-week depot by brand view frames a staffing and fleet conversation.</p><p>The values are illustrative. Relay does not claim a submitted Datathon forecast or optimization engine.</p></div>
+
+    <div class="callout">
+      <b>Prototype boundary</b>
+      <p>This is a high-fidelity front-end prototype. Allocation, forecasts, synchronization, contacts, navigation, ETAs, and operational records are illustrative. State is stored locally in this browser. No live backend, real authentication, production infrastructure, or cross-device synchronization is claimed.</p>
+    </div>
+    <footer class="page-footer"><span>Relay | Design decisions</span><span class="page-number"></span></footer>
+  </section>
+
+  <section class="page">
+    <header class="page-header"><span>Relay case study</span><span>Style guide and AI disclosure</span></header>
+    <span class="eyebrow">Style guide</span>
+    <h2>One operational language across four roles.</h2>
+    <div class="swatches">
+      <div><div class="swatch green"></div><b>Deep green</b><p class="small">Primary actions, feasible, complete</p></div>
+      <div><div class="swatch amber"></div><b>Amber</b><p class="small">Attention, offline, timing risk</p></div>
+      <div><div class="swatch red"></div><b>Red</b><p class="small">Blocked constraints, exceptions</p></div>
+      <div><div class="swatch neutral"></div><b>Warm neutral</b><p class="small">Operational surfaces</p></div>
+    </div>
+    <p>Shared patterns include 44 px minimum controls, consistent status language, visible focus, semantic headings, reduced-motion support, and responsive layouts from 360 to 1440 px. Segoe UI and Arial keep the system font stack self-contained.</p>
+
+    <div class="rule"></div>
+    <span class="eyebrow">AI tool disclosure</span>
+    <h2>How AI assisted this submission.</h2>
+    <div class="grid-3">
+      <article class="panel">
+        <h3>AI-assisted</h3>
+        <p>Requirements extraction, gap analysis, source-alignment suggestions, front-end code revision, test expansion, copy refinement, and beginner documentation were assisted by OpenAI Codex during the final review.</p>
+      </article>
+      <article class="panel">
+        <h3>Human-led and existing work</h3>
+        <p>The original Relay concept, visual direction, interaction model, and submitted workspace were provided by the team. Final competition claims, design judgment, prototype demonstration, and submission decisions remain the team's responsibility.</p>
+      </article>
+      <article class="panel">
+        <h3>Verification</h3>
+        <p>Official booklet requirements and supplied CSV schemas were checked directly. Automated browser tests exercise the connected workflow, exceptions, offline recovery, accessibility behaviors, and responsive layouts.</p>
+      </article>
+    </div>
+    <footer class="page-footer"><span>Relay | Style and disclosure</span><span class="page-number"></span></footer>
+  </section>
+</main>
+</body>
+</html>

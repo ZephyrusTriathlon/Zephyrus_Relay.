@@ -1,13 +1,13 @@
-# Relay — Tech-Triathlon 2026 Designathon
+# Zephyrus Relay — Tech-Triathlon 2026
 
-Relay is a connected delivery-operations prototype for the fictional Waypoint Group: Order → Plan → Load → Deliver → Confirm receipt. It demonstrates the four official user roles and uses the supplied synthetic network conventions for outlets, vehicles, depots, access, temperature, capacity and delivery windows.
+Relay is Waypoint Group's delivery operations system: Order → Plan → Load → Deliver → Confirm receipt. The current application began as Designathon work and is now the frontend foundation for the Hackathon system. It demonstrates the four official user roles and uses the supplied synthetic network conventions for outlets, vehicles, depots, access, temperature, capacity and delivery windows.
 
-The design case study is reserved for the final design PDF and is not part of the web application.
+The live HTML, CSS, vanilla JavaScript and Node static server are in `apps/web/`. Historical Day-5 material is in `docs/designathon/`; current implementation walkthroughs are in `docs/walkthroughs/`, and the project guide is in `docs/guide_temp.md`. The competition datasets are in `data/`, which is intentionally Git-ignored and never served by the web application. Designathon screenshots and documents may differ slightly from the current frontend because the application evolved afterward. The design case study is part of that historical documentation, not the live web application.
 
 ## Run
 
 ```powershell
-npm install
+npm ci
 npm start
 ```
 
@@ -58,7 +58,7 @@ Dialogs have accessible names, keyboard focus containment and focus restoration.
 
 ## Prototype boundaries
 
-All operational records, stock cover, availability, suggestions, routes, ETAs, contacts, forecast values and synchronization are simulated. The prototype uses official field names and representative records, but it does not load the confidential CSV files into the browser. Data persists in this browser’s `relay-v1` localStorage entry; there is no backend or cross-device synchronization. Offline mode demonstrates the experience, not an actual service worker.
+All operational records, stock cover, availability, suggestions, routes, ETAs, contacts, forecast values and synchronization are simulated. The prototype uses official field names and representative records, but it does not load the confidential CSV files into the browser. Data persists in this browser’s `relay-v1` localStorage entry. Backend services, a database, backend authentication, production sessions and real offline synchronization are planned for later phases. There is currently no API backend, PostgreSQL, cross-device synchronization, Service Worker or IndexedDB sync. Offline mode demonstrates the experience rather than providing real offline infrastructure.
 
 One **R-07** Fresh trip is editable and can be released during each demo. **R-12 Style** and **R-15 Tech** are scope previews. Fleet selection uses three representative available vehicles from the supplied Peliyagoda fleet. Suggestions, forecast values, time budgets and schematic maps illustrate decisions; they do not claim optimization or Datathon predictions. New orders placed after release remain queued until a demo reset. Navigation opens an external map search. Partial deliveries remain outstanding for reconciliation; they do not generate a completed receipt.
 

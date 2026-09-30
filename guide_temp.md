@@ -138,7 +138,7 @@ The Store screen reduces uncertain phone/message ordering. The Dispatch screen m
 
 ### First file to open
 
-Open `index.html` first. It is the browser entry point. It links every stylesheet and JavaScript file in the correct order.
+Open `apps/web/index.html` first. It is the browser entry point. It links every stylesheet and JavaScript file in the correct order.
 
 Do not expect `index.html` to contain every visible card and button. This application builds most of its page content with JavaScript. The browser starts with an empty `<div id="app"></div>`, and `workspace.js` fills that container.
 
@@ -167,21 +167,22 @@ Do not expect `index.html` to contain every visible card and button. This applic
 ### How files connect
 
 ```text
-server.js
-  └─ serves index.html
-       ├─ loads styles.css, dispatch.css, store.css, field.css, case-study.css
-       └─ loads workspace.js, dispatch.js, store.js, field.js, case-study.js, script.js
+apps/web/server.js
+  └─ serves apps/web/index.html
+       ├─ loads src/styles/styles.css, src/styles/dispatch.css, src/styles/store.css, src/styles/field.css
+       └─ loads src/scripts/workspace.js, src/scripts/dispatch.js, src/scripts/store.js, src/scripts/field.js, src/scripts/script.js
             ├─ script.js owns shared data and event routing
             ├─ workspace.js renders the common shell
             ├─ dispatch.js renders planning
             ├─ store.js renders store ordering/tracking
-            ├─ field.js renders loading and delivery
-            └─ case-study.js renders Designathon evidence
+            └─ field.js renders loading and delivery
 ```
 
 ## 4. Folder Structure Explanation
 
-### Root files
+### Application files
+
+The browser entry and server are in `apps/web/`. Application styles are in `apps/web/src/styles/`, and scripts are in `apps/web/src/scripts/`.
 
 There is no separate `components/` folder. Reusable prototype components are plain JavaScript functions such as `badge()`, `lifecycle()`, `flow()`, `heading()`, and `dialogFooter()`. There is also no separate `assets/` folder: icons and the simple route illustrations are inline SVG, so the prototype stays self-contained. Configuration is intentionally small and lives in `package.json`, `.gitignore`, and the constants near the top of the JavaScript files.
 
@@ -345,7 +346,7 @@ The head contains information about the page rather than visible application con
 - `theme-color` supplies a green browser theme color on supported devices.
 - `description` explains the prototype to browsers and link previews.
 - `title` names the browser tab.
-- The five `<link rel="stylesheet">` elements load shared and screen-specific CSS.
+- The four `<link rel="stylesheet">` elements load shared and screen-specific CSS.
 
 The stylesheet order matters. `styles.css` provides the shared base first. The other files add more specific layouts afterward.
 
@@ -377,8 +378,7 @@ The `<script>` elements load JavaScript in order:
 2. `dispatch.js` defines dispatcher functions.
 3. `store.js` defines store functions.
 4. `field.js` defines loader and driver functions.
-5. `case-study.js` defines the Designathon evidence view.
-6. `script.js` defines shared state and events, then calls `render()`.
+5. `script.js` defines shared state and events, then calls `render()`.
 
 Scripts share the same browser page, so functions defined by an earlier script can be used by a later one.
 
@@ -460,8 +460,7 @@ Return to Store and open Order tracking. The same order now contains the driver�
 In PowerShell:
 
 ```powershell
-cd "C:\BACKUP 4TB\Tech-Triathlon\tech-triathlon-designathon-ui"
-node server.js
+npm start
 ```
 
 Then open:

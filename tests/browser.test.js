@@ -512,9 +512,10 @@ test('Relay: connected order, planning constraints, field exceptions and respons
         await click('[data-action="verify-delivery"]');
         const sheet = await run(`(() => {
           const rect=selector=>document.querySelector(selector).getBoundingClientRect().toJSON();
-          return {dialog:rect('#dialog'),body:rect('.dialog-body'),footer:rect('.dialog-actions'),close:rect('.dialog-close')};
+          return {pixelRatio:devicePixelRatio,dialog:rect('#dialog'),body:rect('.dialog-body'),footer:rect('.dialog-actions'),close:rect('.dialog-close')};
         })()`);
-        assert.ok(sheet.dialog.top>=0 && sheet.dialog.bottom<=height, 'The sheet stays inside the viewport.');
+        const devicePixel = value => Math.round(value * sheet.pixelRatio);
+        assert.ok(devicePixel(sheet.dialog.top)>=0 && devicePixel(sheet.dialog.bottom)<=devicePixel(height), 'The sheet stays inside the viewport.');
         assert.ok(sheet.body.bottom<=sheet.footer.top+1, 'The footer has its own space below the scrolling form.');
         assert.ok(sheet.close.right>=sheet.dialog.right-16 && sheet.close.top<sheet.dialog.top+16, 'Close remains at the top right.');
         for (const selector of ['#verified-cartons','#verified','#recipient','#delivery-time']) {
@@ -549,7 +550,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
 
   await t.test('design case study is absent from the application', async () => {
     await run("localStorage.setItem('relay_session','dispatcher');role='dispatch';render()");
-    assert.equal(await run("document.querySelector('script[src=\"case-study.js\"],link[href=\"case-study.css\"]')"),null);
+    assert.equal(await run("document.querySelector('script[src=\"src/scripts/case-study.js\"],link[href=\"src/styles/case-study.css\"]')"),null);
     await click('.nav [data-action="account"]');
     assert.equal(await run("document.querySelector('#dialog [data-action=\"case-study\"]')"),null);
     await key('Escape');

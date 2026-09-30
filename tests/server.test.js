@@ -13,7 +13,7 @@ function request(pathname) {
 }
 
 test('static server serves the application assets', async () => {
-  for (const [pathname, type] of [['/', 'text/html; charset=utf-8'], ['/index.html', 'text/html; charset=utf-8'], ['/script.js', 'text/javascript'], ['/dispatch.js', 'text/javascript'], ['/store.js', 'text/javascript'], ['/styles.css', 'text/css']]) {
+  for (const [pathname, type] of [['/', 'text/html; charset=utf-8'], ['/index.html', 'text/html; charset=utf-8'], ['/src/scripts/script.js', 'text/javascript'], ['/src/scripts/dispatch.js', 'text/javascript'], ['/src/scripts/store.js', 'text/javascript'], ['/src/styles/styles.css', 'text/css']]) {
     const response = await request(pathname);
     assert.equal(response.status, 200, pathname);
     assert.equal(response.type, type, pathname);
@@ -24,9 +24,9 @@ test('static server serves the application assets', async () => {
 test('static server hides datasets, internal paths and traversal requests', async () => {
   for (const pathname of [
     '/data/General%20Data/outlets.csv', '/DATA/General%20Data/outlets.csv', '/data%2fGeneral%20Data%2foutlets.csv',
-    '/.git/config', '/%2egit/config', '/.git/../script.js', '/.browser-qa/Default/Preferences', '/.browser-qa/../script.js', '/.env', '/.hidden/../script.js',
-    '/server.js', '/package.json', '/README.md', '/tests/browser.test.js', '/docs/walkthroughs/P2-security-hardening-walkthrough.md', '/case-study.js', '/case-study.css',
-    '/../script.js', '/%2e%2e/script.js', '/data/../script.js', '/%2e%2e%5cscript.js', '/%2F..%2Fscript.js', '/%E0%A4%A'
+    '/.git/config', '/%2egit/config', '/.git/../src/scripts/script.js', '/.browser-qa/Default/Preferences', '/.browser-qa/../src/scripts/script.js', '/.env', '/.hidden/../src/scripts/script.js',
+    '/server.js', '/package.json', '/README.md', '/tests/browser.test.js', '/docs/walkthroughs/P2-security-hardening-walkthrough.md', '/src/scripts/case-study.js', '/src/styles/case-study.css',
+    '/script.js', '/styles.css', '/../src/scripts/script.js', '/%2e%2e/src/scripts/script.js', '/data/../src/scripts/script.js', '/%2e%2e%5csrc%5cscripts%5cscript.js', '/%2F..%2Fsrc/scripts/script.js', '/%E0%A4%A'
   ]) {
     const response = await request(pathname);
     assert.equal(response.status, 404, pathname);

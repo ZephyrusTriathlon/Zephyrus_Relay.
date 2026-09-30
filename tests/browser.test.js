@@ -288,8 +288,10 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     await capture('loader', 834, 1112);
     await capture('loader', 768, 1024);
     await run("location.hash='loader'");
+    // Page.reload can return while the old document still satisfies a render check.
+    await run('window.qaBeforeReload=true');
     await send('Page.reload');
-    await waitFor("typeof render === 'function' && document.querySelector('#main')");
+    await waitFor("!window.qaBeforeReload && typeof state !== 'undefined' && document.querySelector('.view-loader')", 'Warehouse to render in the new document');
     assert.equal(await run('state.offline'), true);
     assert.equal(await run('state.pending.length'), pendingCount);
     assert.equal(await run('assigned().at(-1).loaded'), true);

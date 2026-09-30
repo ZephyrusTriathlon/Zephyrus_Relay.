@@ -3,13 +3,24 @@
   "workspaces": ["apps/web", "apps/api", "packages/domain"],
   "engines": { "node": ">=24" },
   "scripts": {
+    "postinstall": "npm run db:generate",
     "dev": "concurrently --kill-others -n web,api \"npm run dev:web\" \"npm run dev:api\"",
     "dev:web": "npm run dev --workspace=@relay/web",
     "dev:api": "npm run dev --workspace=@relay/api",
     "build": "npm run build --workspace=@relay/web",
     "start": "npm run start --workspace=@relay/api",
     "test": "node --test tests/*.test.js",
-    "test:foundation": "node --test tests/api.test.js tests/server.test.js"
+    "test:foundation": "node --test tests/api.test.js tests/server.test.js",
+    "db:validate": "prisma validate",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:migrate:dev": "prisma migrate dev",
+    "db:seed": "prisma db seed",
+    "db:status": "prisma migrate status",
+    "db:counts": "node --env-file-if-exists=.env prisma/counts.js",
+    "test:data": "node --test tests/data.test.js",
+    "test:db": "node --env-file-if-exists=.env --test tests/database.integration.js"
   },
-  "devDependencies": { "concurrently": "^9.2.1" }
+  "devDependencies": { "concurrently": "^9.2.1", "prisma": "^7.10.0", "csv-parse": "^7.0.3", "zod": "^4.1.0" },
+  "overrides": { "@prisma/config": { "deepmerge-ts": "8.0.2" }, "prisma": { "mysql2": "3.24.5" } }
 }

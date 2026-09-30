@@ -50,7 +50,8 @@ test('static server hides datasets, internal paths and traversal requests', asyn
     '/.git/config', '/%2egit/config', '/.git/../src/scripts/script.js', '/.browser-qa/Default/Preferences', '/.browser-qa/../src/scripts/script.js', '/.env', '/.hidden/../src/scripts/script.js',
     '/server.js', '/package.json', '/README.md', '/tests/browser.test.js', '/docs/walkthroughs/P2-security-hardening-walkthrough.md', '/src/scripts/case-study.js', '/src/styles/case-study.css',
     '/script.js', '/styles.css', '/../src/scripts/script.js', '/%2e%2e/src/scripts/script.js', '/data/../src/scripts/script.js', '/%2e%2e%5csrc%5cscripts%5cscript.js', '/%2F..%2Fsrc/scripts/script.js', '/%E0%A4%A',
-    '/vite.config.js', '/static-policy.js', '/@fs/D:/GitHubProjects/Zephyrus_Relay/package.json', '/@fs/D:/GitHubProjects/Zephyrus_Relay/data/test.csv', '/.env?raw', '/package.json?raw', '/src/config.js/../../package.json'
+    '/vite.config.js', '/static-policy.js', '/@fs/D:/GitHubProjects/Zephyrus_Relay/package.json', '/@fs/D:/GitHubProjects/Zephyrus_Relay/data/test.csv', '/.env?raw', '/package.json?raw', '/src/config.js/../../package.json',
+    '/data/General%20Data/vehicles.csv', '/data/General%20Data/calendar.csv', '/prisma/schema.prisma', '/prisma/seed.js', '/prisma.config.mjs', '/prisma/migrations/20261001000100_initial_domain/migration.sql', '/apps/api/src/db.js'
   ]) {
     const response = await request(pathname);
     assert.equal(response.status, 404, pathname);

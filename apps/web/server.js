@@ -2,7 +2,11 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const root = fs.realpathSync(__dirname);
-const publicFiles = new Set(['index.html','styles.css','dispatch.css','store.css','field.css','workspace.js','dispatch.js','store.js','field.js','script.js']);
+const publicFiles = new Set([
+  'index.html',
+  ...['styles.css','dispatch.css','store.css','field.css'].map(file => path.join('src', 'styles', file)),
+  ...['workspace.js','dispatch.js','store.js','field.js','script.js'].map(file => path.join('src', 'scripts', file))
+]);
 http.createServer((req, res) => {
   const notFound = () => { res.writeHead(404); res.end('Not found'); };
   let pathname;

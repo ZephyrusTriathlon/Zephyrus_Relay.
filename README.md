@@ -7,11 +7,11 @@ The design case study is reserved for the final design PDF and is not part of th
 ## Run
 
 ```powershell
-cd "C:\BACKUP 4TB\Tech-Triathlon\tech-triathlon-designathon-ui"
-node server.js
+npm install
+npm start
 ```
 
-Open **http://localhost:4173**. `npm start` runs the same server. Workspace hashes (`/#store`, `/#dispatch`, `/#loader`, `/#delivery`) respect the signed-in account; another role hash returns to your own workspace.
+Run these commands from the repository root, then open **http://localhost:4173**. Workspace hashes (`/#store`, `/#dispatch`, `/#loader`, `/#delivery`) respect the signed-in account; another role hash returns to your own workspace.
 
 ## Seeded demo accounts
 
@@ -52,7 +52,7 @@ Use **Account > Switch demo account** between each employee in the steps above.
 
 The four workspaces share warm neutral surfaces, deep green actions, restrained status colors, readable operational type and a compact order lifecycle. Mobile Store uses product rows recomposed as touch-friendly cards and an order summary above navigation. Warehouse prioritizes loading sequence on tablets. Delivery uses a single next-stop view, an optional route overview and a primary action above the safe-area-aware navigation. Toasts occupy a separate space above the action bar.
 
-Interface content is real DOM text, grouped using Grid and Flexbox. Small route and vehicle illustrations use SVG; the application itself is not a flattened image or canvas. Shared tokens and patterns live in `styles.css`; role styling is in `dispatch.css`, `store.css` and `field.css`. `script.js` and `workspace.js` manage the shared state and shell; the corresponding view JavaScript files contain their screens and interactions. The system-font stack keeps the prototype self-contained.
+Interface content is real DOM text, grouped using Grid and Flexbox. Small route and vehicle illustrations use SVG; the application itself is not a flattened image or canvas. Shared tokens and patterns live in `apps/web/src/styles/styles.css`; role styling is in `apps/web/src/styles/dispatch.css`, `apps/web/src/styles/store.css` and `apps/web/src/styles/field.css`. `apps/web/src/scripts/script.js` and `apps/web/src/scripts/workspace.js` manage the shared state and shell; the corresponding view JavaScript files contain their screens and interactions. The system-font stack keeps the prototype self-contained.
 
 Dialogs have accessible names, keyboard focus containment and focus restoration. Controls provide visible focus, labeled inputs and status text. Touch targets are enlarged in the field interfaces and reduced-motion preferences are respected.
 
@@ -67,8 +67,9 @@ One **R-07** Fresh trip is editable and can be released during each demo. **R-12
 With Node 24, the local server running and a separate Chrome debugging browser, run:
 
 ```powershell
-Start-Process -FilePath 'C:\Program Files\Google\Chrome\Application\chrome.exe' -ArgumentList '--headless=new','--disable-gpu','--remote-debugging-port=9222','--user-data-dir=C:\BACKUP 4TB\Tech-Triathlon\tech-triathlon-designathon-ui\.browser-qa','--no-first-run','about:blank' -WindowStyle Hidden
-node --test tests/browser.test.js
+$browserProfilePath = Join-Path (Get-Location) '.browser-qa'
+Start-Process -FilePath 'C:\Program Files\Google\Chrome\Application\chrome.exe' -ArgumentList @('--headless=new','--disable-gpu','--remote-debugging-port=9222',"--user-data-dir=`"$browserProfilePath`"",'--no-first-run','about:blank') -WindowStyle Hidden
+npm test
 ```
 
 The dependency-free test opens its own browser tab and restores the previous Relay data and session afterward. It never clears unrelated localStorage. Optional `RELAY_URL` and `RELAY_CDP_URL` environment variables override the server and debugging endpoints.

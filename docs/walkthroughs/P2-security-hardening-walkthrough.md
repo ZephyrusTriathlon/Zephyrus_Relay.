@@ -6,11 +6,11 @@ Prevent the local static server from returning competition datasets or repositor
 
 ## 2. Implementation Summary
 
-The server now serves only the root-level files used by the prototype. Protected or invalid requests receive the same `404 Not found` response as missing files.
+The server now serves only the application files allowed under `apps/web/`. Protected or invalid requests receive the same `404 Not found` response as missing files.
 
 ## 3. Files Changed
 
-- `server.js`: validates request paths and limits serving to application assets.
+- `apps/web/server.js`: validates request paths and limits serving to application assets.
 - `tests/server.test.js`: checks normal assets and protected or traversal-style requests.
 - `docs/walkthroughs/P2-security-hardening-walkthrough.md`: records verification steps and scope.
 
@@ -22,10 +22,10 @@ The server decodes the request path, treats forward and backslashes as separator
 
 1. Start the server with `npm start`.
 2. Open `http://127.0.0.1:4173/` in a browser.
-3. Request `http://127.0.0.1:4173/script.js` and `http://127.0.0.1:4173/styles.css`.
+3. Request `http://127.0.0.1:4173/src/scripts/script.js` and `http://127.0.0.1:4173/src/styles/styles.css`.
 4. Request `http://127.0.0.1:4173/data/General%20Data/outlets.csv`.
 5. Request `http://127.0.0.1:4173/.git/config`, `http://127.0.0.1:4173/.browser-qa/Default/Preferences`, and `http://127.0.0.1:4173/.env`.
-6. Send a raw encoded traversal request with `curl.exe --path-as-is -i "http://127.0.0.1:4173/%2e%2e/script.js"`. Repeat with `"http://127.0.0.1:4173/data/../script.js"` to check normalization cannot bypass the data boundary.
+6. Send a raw encoded traversal request with `curl.exe --path-as-is -i "http://127.0.0.1:4173/%2e%2e/src/scripts/script.js"`. Repeat with `"http://127.0.0.1:4173/data/../src/scripts/script.js"` to check normalization cannot bypass the data boundary.
 7. Check that every protected request has status 404 and only the generic `Not found` body.
 
 ## 6. Expected Results

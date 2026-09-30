@@ -23,10 +23,10 @@ These identities and credentials are fictional prototype data. All four password
 
 ## 4. Files Changed
 
-- `workspace.js`: fictional accounts, session helpers, login, demo account dialog, fixed-role shell and informational workflow indicator.
-- `script.js`: session actions, hash gating, explicit demo handoffs and session-preserving reset.
-- `styles.css`: responsive login and account dialog styling using existing Relay tokens.
-- `case-study.js`: distinct-user rationale and explicitly labeled Driver failure-demo entry.
+- `apps/web/src/scripts/workspace.js`: fictional accounts, session helpers, login, demo account dialog, fixed-role shell and informational workflow indicator.
+- `apps/web/src/scripts/script.js`: session actions, hash gating, explicit demo handoffs and session-preserving reset.
+- `apps/web/src/styles/styles.css`: responsive login and account dialog styling using existing Relay tokens.
+- `apps/web/src/scripts/case-study.js`: distinct-user rationale and explicitly labeled Driver failure-demo entry.
 - `README.md`: credentials, account-switching judge instructions and prototype limitations.
 - `tests/browser.test.js`: account access coverage, session restoration and existing workflow tests adapted to demo account switching.
 - `docs/walkthroughs/P3-role-separated-access-walkthrough.md`: this walkthrough and verification record.

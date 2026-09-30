@@ -1,4 +1,6 @@
 node_modules/
+.env
+data/
 .browser-profile/
 .browser-qa/
 .browser-qa-*/

@@ -1,0 +1,420 @@
+generator client {
+  // Keep the application JavaScript-only. This supported generator emits JS.
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  DISPATCHER
+  LOADER
+  DRIVER
+  STORE_MANAGER
+}
+enum RecordSource {
+  SUPPLIED
+  DEMO
+  APPLICATION
+}
+enum Brand {
+  FRESH
+  STYLE
+  TECH
+}
+enum VehicleType {
+  VAN
+  TRUCK
+}
+enum TemperatureCapability {
+  AMBIENT
+  REEFER
+}
+enum TemperatureRequirement {
+  AMBIENT
+  CHILLED
+}
+enum FuelType {
+  DIESEL
+}
+enum DockType {
+  STREET
+  REAR_DOCK
+  MALL_BAY
+}
+enum ParkingConstraint {
+  NORMAL
+  VAN_ONLY
+  MALL_DOCK
+}
+enum OrderStatus {
+  CONFIRMED
+  PLANNED
+  DEFERRED
+  RELEASED
+  IN_DELIVERY
+  DELIVERED
+  RECEIVED
+  CANCELLED
+}
+enum TripStatus {
+  DRAFT
+  RELEASED
+  LOADING
+  READY
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+enum StopStatus {
+  PENDING
+  ARRIVED
+  COMPLETED
+  DEFERRED
+}
+enum LoadingStatus {
+  PENDING
+  LOADED
+  ISSUE
+}
+enum IssueStatus {
+  OPEN
+  RESOLVED
+}
+enum LoadingIssueType {
+  MISSING
+  DAMAGED
+  QUANTITY_MISMATCH
+  OTHER
+}
+enum DeliveryEventType {
+  STARTED
+  ARRIVED
+  DEFERRED
+  REATTEMPTED
+  DELIVERED
+}
+enum DeliveryExceptionType {
+  STORE_CLOSED
+  RECIPIENT_UNAVAILABLE
+  DAMAGED_GOODS
+  PARTIAL_DELIVERY
+  REFUSED
+  ACCESS_DELAYED
+}
+enum DeferralReason {
+  CAPACITY
+  TEMPERATURE
+  ACCESS
+  DELIVERY_WINDOW
+  FUEL
+  TIME_BUDGET
+  OTHER
+}
+enum SyncStatus {
+  PENDING
+  APPLIED
+  REJECTED
+  CONFLICT
+}
+
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  displayName String
+  role        Role
+  active      Boolean  @default(true)
+  source      RecordSource @default(APPLICATION)
+  outletId    String?
+  outlet      Outlet?  @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
+  orders      Order[]
+  trips       Trip[]
+  deferrals   Deferral[]
+  loadingChecks LoadingCheck[]
+  loadingIssues LoadingIssue[]
+  deliveryEvents DeliveryEvent[]
+  deliveryExceptions DeliveryException[]
+  proofs      ProofOfDelivery[]
+  receipts    ReceiptConfirmation[]
+  mutations   SyncMutation[]
+  @@index([outletId])
+}
+
+model Depot {
+  id        String @id
+  name      String @unique
+  source    RecordSource @default(SUPPLIED)
+  outlets   Outlet[]
+  vehicles  Vehicle[]
+  trips     Trip[]
+}
+
+model Outlet {
+  id                String @id
+  brand             Brand
+  district          String
+  depotId           String
+  depot             Depot @relation(fields: [depotId], references: [id], onDelete: Restrict)
+  dockType          DockType
+  parkingConstraint ParkingConstraint
+  mallWindow        String? @db.VarChar(11)
+  windowOpenTime    String @db.VarChar(5)
+  windowCloseTime   String @db.VarChar(5)
+  source            RecordSource @default(SUPPLIED)
+  users             User[]
+  orders            Order[]
+  stops             TripStop[]
+  @@index([depotId, brand])
+}
+
+model Vehicle {
+  id                String @id
+  type              VehicleType
+  temperature       TemperatureCapability
+  weightCapacityKg  Decimal @db.Decimal(12, 3)
+  volumeCapacityM3  Decimal @db.Decimal(12, 3)
+  fuelType          FuelType
+  kmPerLitre        Decimal @db.Decimal(10, 3)
+  weeklyFuelQuotaL  Decimal @db.Decimal(12, 3)
+  depotId           String
+  depot             Depot @relation(fields: [depotId], references: [id], onDelete: Restrict)
+  source            RecordSource @default(SUPPLIED)
+  trips             Trip[]
+  @@index([depotId, type, temperature])
+}
+
+model CalendarDay {
+  date          DateTime @id @db.Date
+  dayOfWeek     Int
+  dayName       String @db.VarChar(3)
+  isWeekend     Boolean
+  isoYear       Int
+  isoWeek       Int
+  isPayday      Boolean
+  festival      String?
+  festivalRamp  Decimal @db.Decimal(3, 2)
+  isHoliday     Boolean
+  monsoon       Boolean
+  isOperating   Boolean
+  source        RecordSource @default(SUPPLIED)
+  // Operational dates remain independent so future orders can precede calendar imports.
+}
+
+model Order {
+  id                    String @id @default(uuid())
+  orderNumber           String @unique
+  outletId              String
+  outlet                Outlet @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  deliveryDate          DateTime @db.Date
+  status                OrderStatus @default(CONFIRMED)
+  temperatureRequirement TemperatureRequirement
+  windowOpenTime        String @db.VarChar(5)
+  windowCloseTime       String @db.VarChar(5)
+  createdById           String?
+  createdBy             User? @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  source                RecordSource @default(APPLICATION)
+  demoScenario          String?
+  createdAt             DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime @updatedAt @db.Timestamptz(6)
+  items                 OrderItem[]
+  allocation            Allocation?
+  deferrals             Deferral[]
+  @@unique([id, outletId])
+  // Deliberately not unique: Fresh may order multiple times on one delivery date.
+  @@index([outletId, deliveryDate])
+  @@index([deliveryDate, status])
+}
+
+model OrderItem {
+  id                  String @id @default(uuid())
+  orderId             String
+  order               Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  lineNumber          Int
+  productCode         String
+  description         String
+  cartons             Int
+  unitWeightKg        Decimal @db.Decimal(12, 3)
+  unitVolumeM3        Decimal @db.Decimal(12, 3)
+  temperatureRequirement TemperatureRequirement
+  @@unique([orderId, lineNumber])
+}
+
+model Trip {
+  id           String @id @default(uuid())
+  tripNumber   String @unique
+  deliveryDate DateTime @db.Date
+  sequence     Int @default(1)
+  depotId      String
+  depot        Depot @relation(fields: [depotId], references: [id], onDelete: Restrict)
+  vehicleId    String
+  vehicle      Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  driverId     String?
+  driver       User? @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  status       TripStatus @default(DRAFT)
+  source       RecordSource @default(APPLICATION)
+  plannedDepartureAt DateTime? @db.Timestamptz(6)
+  startedAt    DateTime? @db.Timestamptz(6)
+  completedAt  DateTime? @db.Timestamptz(6)
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
+  stops        TripStop[]
+  allocations  Allocation[]
+  @@unique([vehicleId, deliveryDate, sequence])
+  @@index([deliveryDate, status])
+}
+
+model TripStop {
+  id          String @id @default(uuid())
+  tripId      String
+  trip        Trip @relation(fields: [tripId], references: [id], onDelete: Restrict)
+  outletId    String
+  outlet      Outlet @relation(fields: [outletId], references: [id], onDelete: Restrict)
+  position    Int
+  status      StopStatus @default(PENDING)
+  expectedAt  DateTime? @db.Timestamptz(6)
+  arrivedAt   DateTime? @db.Timestamptz(6)
+  completedAt DateTime? @db.Timestamptz(6)
+  allocations Allocation[]
+  @@unique([tripId, position])
+  @@unique([id, tripId, outletId])
+  @@index([outletId])
+}
+
+model Allocation {
+  id         String @id @default(uuid())
+  orderId    String @unique
+  outletId   String
+  order      Order @relation(fields: [orderId, outletId], references: [id, outletId], onDelete: Restrict)
+  tripId     String
+  trip       Trip @relation(fields: [tripId], references: [id], onDelete: Restrict)
+  tripStopId String
+  tripStop   TripStop @relation(fields: [tripStopId, tripId, outletId], references: [id, tripId, outletId], onDelete: Restrict)
+  allocatedAt DateTime @default(now()) @db.Timestamptz(6)
+  loadingCheck LoadingCheck?
+  loadingIssues LoadingIssue[]
+  events     DeliveryEvent[]
+  exceptions DeliveryException[]
+  proof      ProofOfDelivery?
+  @@unique([orderId, outletId])
+  @@index([tripId])
+  @@index([tripStopId, tripId, outletId])
+}
+
+model Deferral {
+  id         String @id @default(uuid())
+  orderId    String
+  order      Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  reason     DeferralReason
+  explanation String
+  impact     String
+  deferredById String?
+  deferredBy User? @relation(fields: [deferredById], references: [id], onDelete: Restrict)
+  deferredAt DateTime @default(now()) @db.Timestamptz(6)
+  nextEligibleDate DateTime? @db.Date
+  resolvedAt DateTime? @db.Timestamptz(6)
+  @@index([orderId, deferredAt])
+}
+
+model LoadingCheck {
+  id           String @id @default(uuid())
+  allocationId String @unique
+  allocation   Allocation @relation(fields: [allocationId], references: [id], onDelete: Restrict)
+  status       LoadingStatus @default(PENDING)
+  loadedCartons Int @default(0)
+  checkedById  String?
+  checkedBy    User? @relation(fields: [checkedById], references: [id], onDelete: Restrict)
+  checkedAt    DateTime? @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
+}
+
+model LoadingIssue {
+  id           String @id @default(uuid())
+  allocationId String
+  allocation   Allocation @relation(fields: [allocationId], references: [id], onDelete: Restrict)
+  type         LoadingIssueType
+  status       IssueStatus @default(OPEN)
+  details      String
+  resolution   String?
+  reportedById String?
+  reportedBy   User? @relation(fields: [reportedById], references: [id], onDelete: Restrict)
+  reportedAt   DateTime @default(now()) @db.Timestamptz(6)
+  resolvedAt   DateTime? @db.Timestamptz(6)
+  @@index([allocationId, status])
+}
+
+model DeliveryEvent {
+  id           String @id @default(uuid())
+  allocationId String
+  allocation   Allocation @relation(fields: [allocationId], references: [id], onDelete: Restrict)
+  type         DeliveryEventType
+  actorId      String?
+  actor        User? @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  occurredAt   DateTime @db.Timestamptz(6)
+  recordedAt   DateTime @default(now()) @db.Timestamptz(6)
+  note         String?
+  @@index([allocationId, occurredAt])
+}
+
+model DeliveryException {
+  id           String @id @default(uuid())
+  allocationId String
+  allocation   Allocation @relation(fields: [allocationId], references: [id], onDelete: Restrict)
+  type         DeliveryExceptionType
+  status       IssueStatus @default(OPEN)
+  details      String
+  resolution   String?
+  reportedById String?
+  reportedBy   User? @relation(fields: [reportedById], references: [id], onDelete: Restrict)
+  reportedAt   DateTime @default(now()) @db.Timestamptz(6)
+  resolvedAt   DateTime? @db.Timestamptz(6)
+  @@index([allocationId, status])
+}
+
+model ProofOfDelivery {
+  id           String @id @default(uuid())
+  allocationId String @unique
+  allocation   Allocation @relation(fields: [allocationId], references: [id], onDelete: Restrict)
+  recipient    String
+  deliveredCartons Int
+  verified     Boolean @default(false)
+  deliveredAt  DateTime @db.Timestamptz(6)
+  recordedAt   DateTime @default(now()) @db.Timestamptz(6)
+  driverId     String
+  driver       User @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  receipt      ReceiptConfirmation?
+}
+
+model ReceiptConfirmation {
+  id           String @id @default(uuid())
+  proofId      String @unique
+  proof        ProofOfDelivery @relation(fields: [proofId], references: [id], onDelete: Restrict)
+  confirmedById String
+  confirmedBy  User @relation(fields: [confirmedById], references: [id], onDelete: Restrict)
+  receivedCartons Int
+  confirmedAt  DateTime @default(now()) @db.Timestamptz(6)
+  note         String?
+}
+
+model SyncMutation {
+  id           String @id @default(uuid())
+  deviceId     String
+  clientMutationId String
+  actorId      String
+  actor        User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  entityType   String
+  entityId     String
+  operation    String
+  baseVersion  Int
+  payload      Json
+  status       SyncStatus @default(PENDING)
+  clientOccurredAt DateTime @db.Timestamptz(6)
+  receivedAt   DateTime @default(now()) @db.Timestamptz(6)
+  appliedAt    DateTime? @db.Timestamptz(6)
+  errorCode    String?
+  @@unique([deviceId, clientMutationId])
+  @@index([actorId, receivedAt])
+  @@index([entityType, entityId])
+}

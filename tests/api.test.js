@@ -10,6 +10,38 @@ before(async () => {
 });
 after(() => new Promise(resolve => server.close(resolve)));
 
+test('database sources and exact competition CSV paths are not downloadable', async () => {
+  for (const pathname of ['/data/General%20Data/outlets.csv', '/data/General%20Data/vehicles.csv', '/data/General%20Data/calendar.csv', '/prisma/schema.prisma', '/prisma/seed.js', '/prisma.config.mjs', '/prisma/migrations/20261001000100_initial_domain/migration.sql', '/apps/api/src/db.js']) {
+    const response = await fetch(base + pathname);
+    assert.equal(response.status, 404, pathname);
+    assert.equal(await response.text(), 'Not found', pathname);
+  }
+});
+
+test('development data reads are off by default', async () => {
+  for (const endpoint of ['/api/outlets', '/api/vehicles', '/api/demo-day']) assert.equal((await fetch(base + endpoint)).status, 404);
+});
+
+test('development reads sanitize database errors and enforce query bounds', async () => {
+  const { createApp } = await import('../apps/api/src/app.js');
+  const failing = createApp({ devReads: true, database: () => { throw new Error('SECRET_DATABASE_DETAIL'); } }).listen(0, '127.0.0.1');
+  await new Promise(resolve => failing.once('listening', resolve));
+  try {
+    const url = `http://127.0.0.1:${failing.address().port}`;
+    for (const endpoint of ['/api/outlets', '/api/vehicles', '/api/demo-day']) {
+      const response = await fetch(url + endpoint);
+      assert.equal(response.status, 503);
+      assert.deepEqual(await response.json(), { error: 'Database unavailable' });
+    }
+    for (const query of ['?limit=0', '?limit=51', '?offset=-1', '?limit=no', '?include=users', '?limit=1&limit=2']) assert.equal((await fetch(url + '/api/outlets' + query)).status, 400);
+    const previous = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = 'production';
+      assert.equal((await fetch(url + '/api/outlets')).status, 404);
+    } finally { if (previous === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previous; }
+  } finally { await new Promise(resolve => failing.close(resolve)); }
+});
+
 test('API health, security headers, 404 and JSON errors', async () => {
   const response = await fetch(`${base}/api/health`);
   assert.equal(response.status, 200);

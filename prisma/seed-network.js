@@ -1,0 +1,53 @@
+import { loadNetwork } from './import-network.js';
+import { makeDemo } from './demo.js';
+import { RecordSource } from '../packages/domain/src/index.js';
+
+export async function counts(db) {
+  const [outlets, vehicles, depots, calendarDays, demoOrders, demoTrips, demoUsers] = await Promise.all([
+    db.outlet.count({ where: { source: RecordSource.SUPPLIED } }), db.vehicle.count({ where: { source: RecordSource.SUPPLIED } }),
+    db.depot.count({ where: { source: RecordSource.SUPPLIED } }), db.calendarDay.count({ where: { source: RecordSource.SUPPLIED } }),
+    db.order.count({ where: { source: RecordSource.DEMO } }), db.trip.count({ where: { source: RecordSource.DEMO } }), db.user.count({ where: { source: RecordSource.DEMO } })
+  ]);
+  return { outlets, vehicles, depots, calendarDays, demoOrders, demoTrips, demoUsers };
+}
+
+export async function seedNetwork(db, { dataDir } = {}) {
+  if (process.env.RELAY_ALLOW_SEED !== 'true' || process.env.NODE_ENV === 'production') throw new Error('Seeding requires RELAY_ALLOW_SEED=true outside production');
+  // Complete validation and demo selection before opening the write transaction.
+  const network = await loadNetwork(dataDir);
+  const demo = makeDemo(network);
+  return db.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(76602)`;
+    for (const [model, rows, key] of [['depot', network.depots, 'id'], ['outlet', network.outlets, 'id'], ['vehicle', network.vehicles, 'id'], ['calendarDay', network.calendar, 'date']]) {
+      for (const record of rows) {
+        const where = { [key]: record[key] };
+        const existing = await tx[model].findUnique({ where, select: { source: true } });
+        if (existing && existing.source !== RecordSource.SUPPLIED) throw new Error(`Seed refused to overwrite a non-supplied ${model} record`);
+        await tx[model].upsert({ where, create: record, update: record });
+      }
+    }
+    async function createOnce(model, record) {
+      if (record.source) {
+        const existing = await tx[model].findUnique({ where: { id: record.id }, select: { source: true } });
+        if (existing && existing.source !== RecordSource.DEMO) throw new Error(`Seed ID conflict in ${model}`);
+      }
+      // Existing transaction state is preserved; re-seeding is not a reset command.
+      await tx[model].upsert({ where: { id: record.id }, create: record, update: {} });
+    }
+    for (const user of demo.users) await createOnce('user', user);
+    for (const { item, ...order } of demo.orders) {
+      await createOnce('order', order);
+      await createOnce('orderItem', { ...item, orderId: order.id });
+    }
+    await createOnce('trip', demo.trip);
+    for (const stop of demo.stops) await createOnce('tripStop', stop);
+    for (const allocation of demo.allocations) {
+      await createOnce('allocation', allocation);
+      await createOnce('loadingCheck', { id: `demo-loading-${allocation.id.slice(16)}`, allocationId: allocation.id, status: demo.loadingStatus, updatedAt: demo.createdAt });
+    }
+    await createOnce('deferral', demo.deferral);
+    const result = await counts(tx);
+    if (result.outlets !== 120 || result.vehicles !== 60 || result.depots !== 2 || result.calendarDays !== network.calendar.length) throw new Error('Unexpected supplied records already exist; seed rolled back without deleting them');
+    return result;
+  }, { timeout: 120000, maxWait: 10000 });
+}

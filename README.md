@@ -2,7 +2,7 @@
 
 Relay is Waypoint Group's delivery operations system: Order → Plan → Load → Deliver → Confirm receipt. The current application began as Designathon work and is now the frontend foundation for the Hackathon system. It demonstrates the four official user roles and uses the supplied synthetic network conventions for outlets, vehicles, depots, access, temperature, capacity and delivery windows.
 
-The live HTML, CSS and vanilla JavaScript frontend uses Vite in `apps/web/`. The Express health API is in `apps/api/`, and shared role constants are in `packages/domain/`. Historical Day-5 material is in `docs/designathon/`; current implementation walkthroughs are in `docs/walkthroughs/`, and the project guide is in `docs/guide_temp.md`. The competition datasets are in `data/`, which is intentionally Git-ignored and never served by the web application. Designathon screenshots and documents may differ slightly from the current frontend because the application evolved afterward. The design case study is part of that historical documentation, not the live web application.
+The live HTML, CSS and vanilla JavaScript frontend uses Vite in `apps/web/`. The Express API is in `apps/api/`, shared domain constants are in `packages/domain/`, and the PostgreSQL schema, migrations and seed are in `prisma/`. Historical Day-5 material is in `docs/designathon/`; current implementation walkthroughs are in `docs/walkthroughs/`, and the project guide is in `docs/guide_temp.md`. The competition datasets are in `data/`, which is intentionally Git-ignored and never served by the web application. Designathon screenshots and documents may differ slightly from the current frontend because the application evolved afterward. The design case study is part of that historical documentation, not the live web application.
 
 ## Run
 
@@ -15,7 +15,9 @@ Run these commands from the repository root, then open **http://localhost:4173**
 
 Vite runs on port 4173 and proxies `/api/*` to Express on port 3001. Use `npm run dev:web` and `npm run dev:api` for separate terminals. For production, run `npm run build` then `npm start` and open http://localhost:3001. Optional configuration examples live in each application's `.env.example`.
 
-See [Stage 01 foundation](docs/walkthroughs/stage-01-foundation.md) for architecture, configuration, security and Stage 2 prerequisites.
+See [Stage 01 foundation](docs/walkthroughs/stage-01-foundation.md) for the frontend architecture. [Stage 02 data](docs/walkthroughs/stage-02-data.md) covers PostgreSQL setup, private dataset ingestion, migrations and development read APIs; [the data model](docs/data-model.md) documents the persisted entities.
+
+For database setup, configure root `.env` from `.env.example`, then run `npm run db:migrate`, `npm run db:seed` (requires `RELAY_ALLOW_SEED=true`) and `npm run db:counts`. The UI still works independently using its original localStorage prototype. Development data APIs require `RELAY_DEV_READS=true` and loopback access; keep them disabled outside local development.
 
 ## Seeded demo accounts
 
@@ -62,13 +64,13 @@ Dialogs have accessible names, keyboard focus containment and focus restoration.
 
 ## Prototype boundaries
 
-All operational records, stock cover, availability, suggestions, routes, ETAs, contacts, forecast values and synchronization are simulated. The prototype uses official field names and representative records, but it does not load the confidential CSV files into the browser. Data persists in this browser’s `relay-v1` localStorage entry. Backend services, a database, backend authentication, production sessions and real offline synchronization are planned for later phases. The Stage 1 Express API exposes health only; there is no PostgreSQL, cross-device synchronization, Service Worker or IndexedDB sync. Offline mode demonstrates the experience rather than providing real offline infrastructure.
+All operational records, stock cover, availability, suggestions, routes, ETAs, contacts, forecast values and synchronization are simulated. The prototype uses official field names and representative records, but it does not load the confidential CSV files into the browser. Data persists in this browser’s `relay-v1` localStorage entry. Stage 2 adds PostgreSQL/Prisma, private network ingestion and opt-in development reads, but the frontend is not yet connected to the database. Backend authentication, production sessions, allocation and real offline synchronization remain later work. There is no cross-device synchronization, Service Worker or IndexedDB sync. Offline mode demonstrates the experience rather than providing real offline infrastructure.
 
 One **R-07** Fresh trip is editable and can be released during each demo. **R-12 Style** and **R-15 Tech** are scope previews. Fleet selection uses three representative available vehicles from the supplied Peliyagoda fleet. Suggestions, forecast values, time budgets and schematic maps illustrate decisions; they do not claim optimization or Datathon predictions. New orders placed after release remain queued until a demo reset. Navigation opens an external map search. Partial deliveries remain outstanding for reconciliation; they do not generate a completed receipt.
 
 ## Verification
 
-First run `npm run build`. `npm run test:foundation` runs API, Vite proxy and static-security tests with temporary servers. For the full suite, use Node 24, leave `npm run dev` running and start a separate Chrome debugging browser:
+First run `npm run build`. `npm run test:foundation` runs API, Vite proxy and static-security tests with temporary servers. `npm run test:data` covers CSV validation and enum consistency; `npm run test:db` validates the seeded network against a dedicated PostgreSQL development database as described in the Stage 2 walkthrough. For the full suite, use Node 24, leave `npm run dev` running and start a separate Chrome debugging browser:
 
 ```powershell
 $browserProfilePath = Join-Path (Get-Location) '.browser-qa'

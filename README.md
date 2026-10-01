@@ -13,26 +13,26 @@ npm run dev
 
 Run these commands from the repository root, then open **http://localhost:4173**. Workspace hashes (`/#store`, `/#dispatch`, `/#loader`, `/#delivery`) respect the signed-in account; another role hash returns to your own workspace.
 
-Vite runs on port 4173 and proxies `/api/*` to Express on port 3001. Use `npm run dev:web` and `npm run dev:api` for separate terminals. For production, run `npm run build` then `npm start` and open http://localhost:3001. Optional configuration examples live in each application's `.env.example`.
+Vite runs on port 4173 and proxies `/api/*` to Express on port 3001. Use `npm run dev:web` and `npm run dev:api` for separate terminals. For deployment, run `npm run build`, configure `NODE_ENV=production` and a random `SESSION_SECRET` (32+ characters), then `npm start` behind HTTPS. For a local built-app preview, omit `NODE_ENV=production` and open http://localhost:3001. Optional configuration examples live in each application's `.env.example`.
 
 See [Stage 01 foundation](docs/walkthroughs/stage-01-foundation.md) for the frontend architecture. [Stage 02 data](docs/walkthroughs/stage-02-data.md) covers PostgreSQL setup, private dataset ingestion, migrations and development read APIs; [the data model](docs/data-model.md) documents the persisted entities.
 
-For database setup, configure root `.env` from `.env.example`, then run `npm run db:migrate`, `npm run db:seed` (requires `RELAY_ALLOW_SEED=true`) and `npm run db:counts`. The UI still works independently using its original localStorage prototype. Development data APIs require `RELAY_DEV_READS=true` and loopback access; keep them disabled outside local development.
+For database setup, configure root `.env` from `.env.example`, then run `npm run db:migrate`, `npm run db:seed` (requires `RELAY_ALLOW_SEED=true`) and `npm run db:counts`. Stage 3 requires the API and database for login; operational screens still use localStorage prototype records. Development data APIs require `RELAY_DEV_READS=true` and authenticated Dispatcher access over loopback; keep them disabled outside local development.
 
-## Seeded demo accounts
+## Authentication and seeded accounts
 
-These are four fictional people with fixed roles. All use the demo password **`RelayDemo!26`**.
+Run migrations and seed before signing in. All four development accounts use **`RelayDemo!26`**; the seed stores independently salted bcrypt hashes in PostgreSQL. These credentials live in server seed code and documentation only.
 
-| Name | Email (or employee ID) | Assigned role |
-| --- | --- | --- |
-| Nimasha Perera | `store@relay.demo` (`store`) | STORE_MANAGER |
-| Dinuka Fernando | `dispatcher@relay.demo` (`dispatcher`) | DISPATCHER |
-| Kasun Silva | `loader@relay.demo` (`loader`) | LOADER |
-| Amal Perera | `driver@relay.demo` (`driver`) | DRIVER |
+| Email / employee ID | Role |
+| --- | --- |
+| `dispatcher@relay.demo` / `dispatcher` | DISPATCHER |
+| `loader@relay.demo` / `loader` | LOADER |
+| `driver@relay.demo` / `driver` | DRIVER |
+| `store@relay.demo` / `store` | STORE_MANAGER |
 
-Sign in with the Store account to begin. During the walkthrough use **Account > Switch demo account**, then select the next employee. This judge-only shortcut simulates signing out and signing in as a different account; shared order and route progress stay intact. It is also available on the login page and at workflow handoffs.
+Use **Account > Sign out**, then enter another account's credentials. There is no account picker or authentication shortcut. Identity comes from `/api/auth/me`; the HttpOnly session cookie references PostgreSQL session storage. localStorage cannot authorize API requests. Set a random `SESSION_SECRET` (32+ characters) to retain sessions across API restarts; production requires it and HTTPS. See [Stage 03 authentication](docs/walkthroughs/stage-03-auth.md) for cookies, RBAC, scoping and verification.
 
-Login is simulated in the frontend on this browser only. The separate `relay_session` entry stores only the account ID. Refresh preserves the session; **Account > Sign out** clears only the session. There is no public signup, editable role, real account provisioning or server-side authorization. Frontend/localStorage changes can bypass this prototype gating.
+`VITE_ENABLE_DEV_TOOLS=false` is the default. Setting it to `true` enables the simulated connectivity control for prototype evaluation only. It does not bypass login or change roles. Rebuild after changing a Vite flag.
 
 ## A complete judging walkthrough
 
@@ -43,7 +43,7 @@ Login is simulated in the frontend on this browser only. The separate `relay_ses
 5. **Store → Order tracking:** the same order shows the Dispatch-calculated **Expected arrival**, delivery window, route and vehicle, then the Driver POD after delivery. Open **View receipt**, check the cartons and choose **Confirm receipt**; only then do received cartons update stock and replenishment suggestions.
 6. **Store → Dispatch issue path:** on a delivered OUT006 order choose **Report an issue**, select a type and enter useful details. Return to **Dispatch → Route** to see the completed delivery and separate Store receipt follow-up. The activity control records the shared handoffs.
 
-Use **Account > Switch demo account** between each employee in the steps above.
+Use **Account > Sign out**, then log in with the next employee's credentials between steps.
 
 ## Useful states to demonstrate
 
@@ -64,13 +64,13 @@ Dialogs have accessible names, keyboard focus containment and focus restoration.
 
 ## Prototype boundaries
 
-All operational records, stock cover, availability, suggestions, routes, ETAs, contacts, forecast values and synchronization are simulated. The prototype uses official field names and representative records, but it does not load the confidential CSV files into the browser. Data persists in this browser’s `relay-v1` localStorage entry. Stage 2 adds PostgreSQL/Prisma, private network ingestion and opt-in development reads, but the frontend is not yet connected to the database. Backend authentication, production sessions, allocation and real offline synchronization remain later work. There is no cross-device synchronization, Service Worker or IndexedDB sync. Offline mode demonstrates the experience rather than providing real offline infrastructure.
+All operational records, stock cover, availability, suggestions, routes, ETAs, contacts, forecast values and synchronization are simulated. The prototype uses official field names and representative records, but it does not load the confidential CSV files into the browser. Data persists in this browser’s `relay-v1` localStorage entry. Stage 2 adds PostgreSQL/Prisma, private network ingestion and opt-in development reads, while operational UI records remain simulated. Stage 3 connects authentication and authorization to the backend. Allocation and real offline synchronization remain later work. There is no cross-device synchronization, Service Worker or IndexedDB sync. Offline mode demonstrates the experience rather than providing real offline infrastructure.
 
 One **R-07** Fresh trip is editable and can be released during each demo. **R-12 Style** and **R-15 Tech** are scope previews. Fleet selection uses three representative available vehicles from the supplied Peliyagoda fleet. Suggestions, forecast values, time budgets and schematic maps illustrate decisions; they do not claim optimization or Datathon predictions. New orders placed after release remain queued until a demo reset. Navigation opens an external map search. Partial deliveries remain outstanding for reconciliation; they do not generate a completed receipt.
 
 ## Verification
 
-First run `npm run build`. `npm run test:foundation` runs API, Vite proxy and static-security tests with temporary servers. `npm run test:data` covers CSV validation and enum consistency; `npm run test:db` validates the seeded network against a dedicated PostgreSQL development database as described in the Stage 2 walkthrough. For the full suite, use Node 24, leave `npm run dev` running and start a separate Chrome debugging browser:
+First apply migrations, seed the local database and run `npm run build`. `node --test tests/auth.test.js` exercises real PostgreSQL sessions and RBAC. `npm run test:foundation` runs API, Vite proxy and static-security tests with temporary servers. `npm run test:data` covers CSV validation and enum consistency; `npm run test:db` validates the seeded network against a dedicated PostgreSQL development database as described in the Stage 2 walkthrough. For the full suite, use Node 24, enable `VITE_ENABLE_DEV_TOOLS=true` for the offline-simulation assertions, leave `npm run dev` running and start a separate Chrome debugging browser:
 
 ```powershell
 $browserProfilePath = Join-Path (Get-Location) '.browser-qa'
@@ -78,10 +78,10 @@ Start-Process -FilePath 'C:\Program Files\Google\Chrome\Application\chrome.exe' 
 npm test
 ```
 
-The dependency-free test opens its own browser tab and restores the previous Relay data and session afterward. It never clears unrelated localStorage. Optional `RELAY_URL` and `RELAY_CDP_URL` environment variables override the server and debugging endpoints.
+The dependency-free test opens its own browser tab and restores previous Relay prototype data afterward; authentication tests use and log out of the isolated QA browser session. It never clears unrelated localStorage. Optional `RELAY_URL` and `RELAY_CDP_URL` environment variables override the server and debugging endpoints.
 
-Coverage includes login validation, all four credentials, role/hash gating, sign out, session refresh, state-preserving demo switching, login layouts at 1440/1024/430/390/360px, and the same order across all four roles; search and filters; quantity bounds and steppers; dialog keyboard behavior; mobile planning tabs; vehicle selection and capacity rejection; reverse loading; issue resolution; offline reload; deferred delivery stops and return visits; receipt validation; Store delivery confirmation; runtime errors; and layout overflow across **360, 390, 430, 768, 834, 1024, 1280 and 1440px**. Active Delivery checks verify that navigation, primary actions and toast messages do not overlap at 360–430px.
+Coverage includes login validation, all four credentials, role/hash gating, sign out, session refresh, state-preserving logout/login, login layouts at 1440/1024/430/390/360px, and the same order across all four roles; search and filters; quantity bounds and steppers; dialog keyboard behavior; mobile planning tabs; vehicle selection and capacity rejection; reverse loading; issue resolution; offline reload; deferred delivery stops and return visits; receipt validation; Store delivery confirmation; runtime errors; and layout overflow across **360, 390, 430, 768, 834, 1024, 1280 and 1440px**. Active Delivery checks verify that navigation, primary actions and toast messages do not overlap at 360–430px.
 
 Full-page screenshots are written to ignored `artifacts/`, including Store 1440/430/390, Dispatch 1440/1024/390, Warehouse 834/768 and Delivery 430/390/360. Additional captures show planning tabs, delivery exceptions and completed receipts. Mobile `-viewport` images preserve the actual visible screen for checking fixed controls.
 
-Detailed P3 steps and verification: [Role-separated access walkthrough](docs/walkthroughs/P3-role-separated-access-walkthrough.md).
+Current authentication verification: [Stage 03 walkthrough](docs/walkthroughs/stage-03-auth.md). The older P3 walkthrough describes historical Designathon behavior.

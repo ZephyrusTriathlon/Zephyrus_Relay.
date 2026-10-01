@@ -122,6 +122,9 @@ enum SyncStatus {
 model User {
   id          String   @id @default(uuid())
   email       String   @unique
+  passwordHash String?
+  depotId     String?
+  depot       Depot? @relation(fields: [depotId], references: [id], onDelete: Restrict)
   displayName String
   role        Role
   active      Boolean  @default(true)
@@ -147,6 +150,7 @@ model Depot {
   id        String @id
   name      String @unique
   source    RecordSource @default(SUPPLIED)
+  users     User[]
   outlets   Outlet[]
   vehicles  Vehicle[]
   trips     Trip[]

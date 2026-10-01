@@ -1,5 +1,22 @@
 {
-  "name": "@relay/api", "version": "1.0.0", "private": true, "type": "module",
-  "scripts": { "dev": "node --env-file-if-exists=../../.env --env-file-if-exists=.env --watch src/server.js", "start": "node --env-file-if-exists=../../.env --env-file-if-exists=.env src/server.js" },
-  "dependencies": { "express": "^5.1.0", "helmet": "^8.1.0", "zod": "^4.1.0", "@relay/domain": "1.0.0", "@prisma/client": "^7.0.0", "@prisma/adapter-pg": "^7.0.0", "pg": "^8.16.0" }
+  "name": "@relay/api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file-if-exists=../../.env --env-file-if-exists=.env --watch src/server.js",
+    "start": "node --env-file-if-exists=../../.env --env-file-if-exists=.env src/server.js"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.0.0",
+    "@prisma/client": "^7.0.0",
+    "@relay/domain": "1.0.0",
+    "bcrypt": "^6.0.0",
+    "connect-pg-simple": "^10.0.0",
+    "express": "^5.1.0",
+    "express-session": "^1.19.0",
+    "helmet": "^8.1.0",
+    "pg": "^8.16.0",
+    "zod": "^4.1.0"
+  }
 }

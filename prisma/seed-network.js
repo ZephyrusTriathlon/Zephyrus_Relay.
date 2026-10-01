@@ -1,3 +1,4 @@
+import bcrypt from 'bcrypt';
 import { loadNetwork } from './import-network.js';
 import { makeDemo } from './demo.js';
 import { RecordSource } from '../packages/domain/src/index.js';
@@ -16,6 +17,7 @@ export async function seedNetwork(db, { dataDir } = {}) {
   // Complete validation and demo selection before opening the write transaction.
   const network = await loadNetwork(dataDir);
   const demo = makeDemo(network);
+  const passwordHashes = await Promise.all(demo.users.map(() => bcrypt.hash('RelayDemo!26', 12)));
   return db.$transaction(async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(76602)`;
     for (const [model, rows, key] of [['depot', network.depots, 'id'], ['outlet', network.outlets, 'id'], ['vehicle', network.vehicles, 'id'], ['calendarDay', network.calendar, 'date']]) {
@@ -34,7 +36,14 @@ export async function seedNetwork(db, { dataDir } = {}) {
       // Existing transaction state is preserved; re-seeding is not a reset command.
       await tx[model].upsert({ where: { id: record.id }, create: record, update: {} });
     }
-    for (const user of demo.users) await createOnce('user', user);
+    for (const [index, original] of demo.users.entries()) {
+      const user = { ...original, email: original.role === 'STORE_MANAGER' ? 'store@relay.demo' : original.email,
+        depotId: original.role === 'LOADER' ? demo.trip.depotId : null };
+      await createOnce('user', { ...user, passwordHash: passwordHashes[index] });
+      // Upgrade Stage 2 accounts once; never reset an existing password on repeat seed.
+      await tx.user.updateMany({ where: { id: user.id, source: RecordSource.DEMO, passwordHash: null },
+        data: { email: user.email, depotId: user.depotId, passwordHash: passwordHashes[index] } });
+    }
     for (const { item, ...order } of demo.orders) {
       await createOnce('order', order);
       await createOnce('orderItem', { ...item, orderId: order.id });

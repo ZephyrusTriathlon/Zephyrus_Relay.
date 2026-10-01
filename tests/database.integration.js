@@ -104,22 +104,27 @@ test('PostgreSQL migration, supplied network, repeatable seed, relations and dev
 
   await t.test('development read APIs return bounded data and reject mutations', async () => {
     const { createApp } = await import('../apps/api/src/app.js');
-    const server = createApp({ devReads: true, database: () => db }).listen(0, '127.0.0.1');
+    const app = createApp({ devReads: true, database: () => db });
+    const server = app.listen(0, '127.0.0.1');
     await new Promise(resolve => server.once('listening', resolve));
     try {
       const base = `http://127.0.0.1:${server.address().port}/api`;
+      const login = await fetch(base + '/auth/login', { method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identifier:'dispatcher',password:'RelayDemo!26'}) });
+      assert.equal(login.status, 200);
+      const headers = {cookie:login.headers.get('set-cookie').split(';')[0]};
       for (const [endpoint, total] of [['outlets',120],['vehicles',60]]) {
-        const response = await fetch(`${base}/${endpoint}?limit=2&offset=1`);
+        const response = await fetch(`${base}/${endpoint}?limit=2&offset=1`, { headers });
         assert.equal(response.status, 200);
         assert.equal(response.headers.get('cache-control'), 'no-store');
         const body = await response.json();
         assert.equal(body.total, total); assert.equal(body.items.length, 2);
-        assert.equal((await fetch(`${base}/${endpoint}?limit=51`)).status, 400);
-        assert.equal((await fetch(`${base}/${endpoint}`, { method: 'POST' })).status, 404);
+        assert.equal((await fetch(`${base}/${endpoint}?limit=51`, { headers })).status, 400);
+        assert.equal((await fetch(`${base}/${endpoint}`, { method: 'POST', headers })).status, 404);
       }
-      const demo = await (await fetch(`${base}/demo-day`)).json();
+      const demo = await (await fetch(`${base}/demo-day`, { headers })).json();
       assert.equal(demo.orders.length, 5); assert.equal(demo.trips.length, 1);
       assert.equal(demo.source, 'DEMO');
-    } finally { await new Promise(resolve => server.close(resolve)); }
+      await fetch(base + '/auth/logout', { method:'POST',headers });
+    } finally { await new Promise(resolve => server.close(resolve)); await app.locals.sessionStore.close(); }
   });
 });

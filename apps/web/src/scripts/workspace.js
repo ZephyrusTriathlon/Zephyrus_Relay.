@@ -1,43 +1,67 @@
 // Shared presentation patterns. Operational state lives in script.js.
-// Fictional, local-only accounts. This models access; it is not authentication security.
-const demoAccounts = Object.freeze([
-  {id:'store', email:'store@relay.demo', name:'Nimasha Perera', role:'STORE_MANAGER', workspace:'store', password:'RelayDemo!26'},
-  {id:'dispatcher', email:'dispatcher@relay.demo', name:'Dinuka Fernando', role:'DISPATCHER', workspace:'dispatch', password:'RelayDemo!26'},
-  {id:'loader', email:'loader@relay.demo', name:'Kasun Silva', role:'LOADER', workspace:'loader', password:'RelayDemo!26'},
-  {id:'driver', email:'driver@relay.demo', name:'Amal Perera', role:'DRIVER', workspace:'delivery', password:'RelayDemo!26'}
-].map(Object.freeze));
-const sessionKey = 'relay_session';
-const currentAccount = () => demoAccounts.find(account => account.id === localStorage.getItem(sessionKey));
+let authenticatedUser = null;
+let identityReady = false;
+let identityGeneration = 0;
+let sessionNotice = "";
+const currentAccount = () => authenticatedUser;
 const accountRole = account => ({STORE_MANAGER:'Store Manager',DISPATCHER:'Dispatcher',LOADER:'Loader',DRIVER:'Driver'})[account.role];
-function enterAccount(id) {
-  const account = demoAccounts.find(account => account.id === id);
-  if (!account) return;
-  closeDialog();
-  localStorage.removeItem(sessionKey);
-  localStorage.setItem(sessionKey, account.id);
-  role=account.workspace;
-  const reveal=role==='dispatch' && pendingDispatchOrderId && dispatchHandoff(pendingDispatchOrderId);
-  history.replaceState(null,'',`#${role}`);render();window.scrollTo(0,0);
-  if(reveal)finishDispatchHandoff();else document.querySelector('#main')?.focus({preventScroll:true});
+async function authRequest(path, body) {
+  if(body !== undefined) identityGeneration++;
+  const response = await fetch('/api/auth/' + path, { credentials: 'same-origin', cache: 'no-store',
+    ...(body !== undefined ? {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)} : {}) });
+  if (!response.ok) {
+    const error = new Error((await response.json()).error || 'Authentication unavailable');
+    error.status = response.status;
+    throw error;
+  }
+  return response.status === 204 ? null : response.json();
 }
-function switchDemoAccount() {
-  openDialog(`<div class="eyebrow">Judge walkthrough only</div><h2>Switch demo account</h2><p>Sign in as a different fictional employee. Each account has a fixed role. Shared orders and route progress are preserved.</p><div class="demo-accounts">${demoAccounts.map(account=>`<button class="btn demo-account" data-action="demo-sign-in" data-account="${account.id}"><span><b>${account.name}</b><small>${accountRole(account)} &middot; ${account.email}</small></span>${currentAccount()?.id===account.id?'<small>Signed in</small>':icon('arrow')}</button>`).join('')}</div>`);
+async function refreshIdentity() {
+  const previous = JSON.stringify(authenticatedUser);
+  const wasReady = identityReady;
+  const previousNotice = sessionNotice;
+  const generation = identityGeneration;
+  try {
+    const {user} = await authRequest('me');
+    if(generation !== identityGeneration)return;
+    sessionNotice = '';
+    authenticatedUser = {...user, name:user.displayName, workspace:({DISPATCHER:'dispatch',STORE_MANAGER:'store',LOADER:'loader',DRIVER:'delivery'})[user.role]};
+  } catch (error) {
+    if(generation !== identityGeneration)return;
+    if(authenticatedUser)sessionNotice = error.status === 401 ? 'Your session has expired. Please sign in again.' : 'Unable to verify your session. Please try signing in again.';
+    else if(error.status !== 401)sessionNotice = 'Authentication service unavailable. Please try again.';
+    authenticatedUser = null;
+    closeDialog();
+  }
+  identityReady = true;
+  if(!wasReady || previous !== JSON.stringify(authenticatedUser) || previousNotice !== sessionNotice) { closeDialog(); render(); }
 }
+async function signOut() {
+  try { await authRequest('logout', {}); sessionNotice=''; authenticatedUser=null; closeDialog(); render(); document.querySelector('#login-id').focus(); }
+  catch { toast('Sign out failed. Please retry.'); }
+}
+window.addEventListener('focus', () => { if (identityReady) refreshIdentity(); });
+setInterval(() => { if (authenticatedUser) refreshIdentity(); }, 60000);
 function loginView() {
   document.body.dataset.role='login';document.body.dataset.hasAction='false';
   history.replaceState(null,'','#login');
-  document.querySelector('#app').innerHTML=`<main id="main" class="login-page" tabindex="-1"><section class="login-card" aria-labelledby="login-title"><div class="brand"><span class="brand-mark">&#8644;</span><span>relay<span class="brand-dot">.</span></span></div><p class="eyebrow">Waypoint delivery operations</p><h1 id="login-title">Welcome back.</h1><p class="subtitle">Sign in to your assigned workspace.</p><form id="login-form" novalidate><label class="form-label" for="login-id">Employee ID / Email</label><input class="input" id="login-id" name="identifier" autocomplete="username" autocapitalize="none" spellcheck="false" aria-describedby="login-error"><label class="form-label" for="login-password">Password</label><input class="input" id="login-password" name="password" type="password" autocomplete="current-password" aria-describedby="login-error"><p id="login-error" class="form-error" role="alert"></p><button class="btn primary wide" type="submit">Sign in ${icon('arrow')}</button></form><p class="helper">Need access? Contact your operations administrator.</p><div class="login-demo"><p>Simulated sign-in on this device. Fictional demo accounts only.</p><button class="mini-btn" data-action="switch-account">Switch demo account</button></div></section></main>`;
-  document.querySelector('#login-form').addEventListener('submit',event=>{
+  document.querySelector('#app').innerHTML=`<main id="main" class="login-page" tabindex="-1"><section class="login-card" aria-labelledby="login-title"><div class="brand"><span class="brand-mark">&#8644;</span><span>relay<span class="brand-dot">.</span></span></div><p class="eyebrow">Waypoint delivery operations</p><h1 id="login-title">Welcome back.</h1><p class="subtitle">Sign in to your assigned workspace.</p><form id="login-form" novalidate><label class="form-label" for="login-id">Employee ID / Email</label><input class="input" id="login-id" name="identifier" autocomplete="username" autocapitalize="none" spellcheck="false" aria-describedby="login-error"><label class="form-label" for="login-password">Password</label><input class="input" id="login-password" name="password" type="password" autocomplete="current-password" aria-describedby="login-error"><p id="login-error" class="form-error" role="alert"></p><button class="btn primary wide" type="submit">Sign in ${icon('arrow')}</button></form><p class="helper">Need access? Contact your operations administrator.</p></section></main>`;
+  document.querySelector('#login-error').textContent=sessionNotice;
+  document.querySelector('#login-form').addEventListener('submit',async event=>{
     event.preventDefault();
     const identifier=document.querySelector('#login-id'),password=document.querySelector('#login-password');
-    const value=identifier.value.trim().toLowerCase();
-    const account=demoAccounts.find(account=>(account.email===value||account.id===value)&&account.password===password.value);
-    const error=!value?'Enter your employee ID or email.':!password.value?'Enter your password.':!account?'Email or password is incorrect.':'';
-    document.querySelector('#login-error').textContent=error;
-    identifier.setAttribute('aria-invalid',String(!value||(!account&&!!password.value)));
-    password.setAttribute('aria-invalid',String(!!value&&!account));
-    if(error){(!value?identifier:password).focus();return;}
-    enterAccount(account.id);
+    const error=!identifier.value.trim()?'Enter your employee ID or email.':!password.value?'Enter your password.':'';
+    const message=document.querySelector('#login-error');
+    message.textContent=error;
+    if(error)return;
+    const button=event.currentTarget.querySelector('[type="submit"]');button.disabled=true;
+    try {
+      await authRequest('login',{identifier:identifier.value,password:password.value});
+      await refreshIdentity();
+      const reveal=role==='dispatch' && pendingDispatchOrderId && dispatchHandoff(pendingDispatchOrderId);
+      if(reveal){render();finishDispatchHandoff();}
+    } catch(error) {message.textContent=error.message;}
+    finally {button.disabled=false;}
   });
 }
 
@@ -58,11 +82,12 @@ function offlineBanner() {
 }
 
 function render() {
+  if(!identityReady){document.querySelector('#app').textContent='Checking session?';return;}
   const account=currentAccount();
   if(!account){loginView();return;}
   role=account.workspace;
   if(location.hash!==`#${role}`)history.replaceState(null,'',`#${role}`);
-  const r={...roles[role],user:account.name,initials:account.name.split(' ').map(name=>name[0]).join(''),title:accountRole(account)};
+  const r={...roles[role],user:esc(account.name),initials:account.name.split(' ').map(name=>name[0]).join(''),title:accountRole(account)};
   document.body.dataset.role = role;
   document.body.dataset.hasAction = String((role === 'store' && tab === 'replenishment') || (role === 'delivery' && state.ready && assigned().some(o => o.status !== 'Delivered')));
   document.querySelector('#app').innerHTML = `
@@ -75,12 +100,8 @@ function render() {
     <div class="shell">
       <main id="main" tabindex="-1" class="view-${role}">${role === 'dispatch' ? dispatchView() : role === 'store' ? storeView() : role === 'loader' ? loaderView() : deliveryView()}</main>
     </div>`;
-  // Legacy workflow handoffs become explicit judge conveniences, never employee navigation.
-  document.querySelectorAll('#main [data-role]').forEach(button=>{
-    button.removeAttribute('data-role');button.dataset.action='switch-account';
-    button.classList.remove('primary');button.classList.add('demo-handoff');
-    button.textContent='Switch demo account';
-  });
+  document.querySelectorAll('#main [data-role]').forEach(button=>button.remove());
+  if(!window.relayDevTools)document.querySelectorAll('[data-action="offline"],[data-action="reset-confirm"]').forEach(button=>button.remove());
   bindInputs();
   if (typeof bindStoreInputs === 'function') bindStoreInputs();
   if (typeof bindFieldInputs === 'function') bindFieldInputs();

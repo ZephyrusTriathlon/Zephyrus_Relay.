@@ -1,11 +1,14 @@
 {
   "name": "zephyrus-relay", "version": "1.0.0", "private": true,
-  "workspaces": ["apps/web", "apps/api", "packages/domain"],
+  "workspaces": ["apps/web", "apps/api", "apps/product-page", "packages/domain"],
   "engines": { "node": ">=24" },
   "scripts": {
     "postinstall": "npm run db:generate",
     "dev": "concurrently --kill-others -n web,api \"npm run dev:web\" \"npm run dev:api\"",
     "dev:web": "npm run dev --workspace=@relay/web",
+    "dev:product": "npm run dev --workspace=@relay/product-page",
+    "build:product": "npm run build --workspace=@relay/product-page",
+    "preview:product": "npm run preview --workspace=@relay/product-page",
     "dev:api": "npm run dev --workspace=@relay/api",
     "build": "npm run build --workspace=@relay/web",
     "start": "npm run start --workspace=@relay/api",

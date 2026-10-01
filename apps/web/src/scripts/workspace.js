@@ -34,10 +34,11 @@ async function refreshIdentity() {
     closeDialog();
   }
   identityReady = true;
-  if(!wasReady || previous !== JSON.stringify(authenticatedUser) || previousNotice !== sessionNotice) { closeDialog(); render(); }
+  if(!wasReady || previous !== JSON.stringify(authenticatedUser) || previousNotice !== sessionNotice) { resetStoreData(); closeDialog(); render(); }
+  else if(authenticatedUser?.workspace === 'store') loadStoreOrders();
 }
 async function signOut() {
-  try { await authRequest('logout', {}); sessionNotice=''; authenticatedUser=null; closeDialog(); render(); document.querySelector('#login-id').focus(); }
+  try { await authRequest('logout', {}); sessionNotice=''; authenticatedUser=null; resetStoreData(); closeDialog(); render(); document.querySelector('#login-id').focus(); }
   catch { toast('Sign out failed. Please retry.'); }
 }
 window.addEventListener('focus', () => { if (identityReady) refreshIdentity(); });

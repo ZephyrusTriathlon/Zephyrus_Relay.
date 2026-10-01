@@ -1,3 +1,10 @@
 {
-  "name": "@relay/domain", "version": "1.0.0", "private": true, "type": "module", "exports": "./src/index.js"
+  "name": "@relay/domain",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.js",
+  "dependencies": {
+    "zod": "^4.1.0"
+  }
 }

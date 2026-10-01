@@ -3,6 +3,23 @@ const assert = require('node:assert/strict');
 const { connect } = require('./cdp');
 
 test('Relay: connected order, planning constraints, field exceptions and responsive views', { timeout: 240000 }, async t => {
+  const createdOrderIds = [];
+  // Serve the real UI/API with a fixed clock inside the supplied calendar range.
+  if (require('node:fs').existsSync('.env')) process.loadEnvFile('.env');
+  const {createApp}=await import('../apps/api/src/app.js');
+  const {createDatabase}=await import('../apps/api/src/db.js');
+  const {createServer}=await import('vite');
+  const db=createDatabase();
+  let orderNow=new Date('2025-01-03T15:59:00+05:30');
+  const app=createApp({database:()=>db,orderClock:()=>orderNow});
+  const api=app.listen(0,'127.0.0.1');
+  await new Promise(resolve=>api.once('listening',resolve));
+  const previousUrl=process.env.RELAY_URL, previousDevTools=process.env.VITE_ENABLE_DEV_TOOLS;
+  process.env.VITE_ENABLE_DEV_TOOLS='true';
+  const web=await createServer({configFile:require('node:path').resolve('apps/web/vite.config.js'),server:{middlewareMode:true,hmr:false,proxy:{'/api':{target:`http://127.0.0.1:${api.address().port}`}}}});
+  const webHttp=require('node:http').createServer(web.middlewares).listen(0,'127.0.0.1');
+  await new Promise(resolve=>webHttp.once('listening',resolve));
+  process.env.RELAY_URL=`http://127.0.0.1:${webHttp.address().port}`;
   const browser = await connect();
   const { send, input, key, viewport, screenshot, waitFor } = browser;
   const login = async id => {
@@ -21,6 +38,14 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     if(previousSession!==undefined)await run(previousSession===null?"localStorage.removeItem('relay_session')":`localStorage.setItem('relay_session',${JSON.stringify(previousSession)})`).catch(()=>{});
     await run("authRequest('logout',{})").catch(()=>{});
     await browser.close();
+    if (createdOrderIds.length) {
+      await db.orderStatusEvent.deleteMany({where:{orderId:{in:createdOrderIds}}});
+      await db.orderItem.deleteMany({where:{orderId:{in:createdOrderIds}}});
+      await db.order.deleteMany({where:{id:{in:createdOrderIds}}});
+    }
+    await web.close();await new Promise(resolve=>webHttp.close(resolve));await new Promise(resolve=>api.close(resolve));await app.locals.sessionStore.close();await db.$disconnect();
+    if(previousUrl===undefined)delete process.env.RELAY_URL;else process.env.RELAY_URL=previousUrl;
+    if(previousDevTools===undefined)delete process.env.VITE_ENABLE_DEV_TOOLS;else process.env.VITE_ENABLE_DEV_TOOLS=previousDevTools;
   });
   await viewport(1440);
   await browser.navigate('#dispatch');
@@ -32,6 +57,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
 
   const switchAccount = async workspace => {
     if(await run('!!currentAccount()')) {
+      if(await run("currentAccount().workspace==='store'")) await waitFor('!!storeData && !storeLoading');
       await run('closeDialog()');
       await click('.nav [data-action="account"]');
       await click('#dialog [data-action="sign-out"]');
@@ -41,6 +67,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     await click('#login-form [type="submit"]');
     await waitFor(`currentAccount()?.workspace===${JSON.stringify(workspace)}`);
     assert.equal(await run('currentAccount().workspace'),workspace);
+    if (workspace === 'store') await waitFor('!!storeData && !storeLoading');
   };
 
   await t.test('server login, fixed roles, session isolation and responsive account access', async () => {
@@ -70,7 +97,8 @@ test('Relay: connected order, planning constraints, field exceptions and respons
       assert.equal(await run("document.querySelector('.topbar')"),null);
       assert.deepEqual(await run("[...document.querySelectorAll('.nav button')].map(button=>button.dataset.action)"),['workspace-home','account','activity']);
       await click('.nav [data-action="activity"]');
-      assert.match(await run("document.querySelector('#dialog').innerText"),/Every handoff, connected/);
+      if (workspace === 'store') { await waitFor('!!storeData && !storeLoading'); assert.match(await run("document.querySelector('#main').innerText"),/Every order, every handoff/); }
+      else assert.match(await run("document.querySelector('#dialog').innerText"),/Every handoff, connected/);
       await key('Escape');
       for(const target of ['store','dispatch','loader','delivery']){
         await run(`location.hash=${JSON.stringify(target)}`);
@@ -198,54 +226,78 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     await viewport(1440);
   });
 
-  await stage('store search, quantities, keyboard review and order submission', async () => {
-    await run("queueQuery='stale search hiding all orders';queueFilter='priority';dispatchPanel='vehicle'");
+  await stage('Store API order review, persistence, separate temperatures and status visibility', async () => {
     await switchAccount('store');
-    assert.equal(await run("document.querySelector('[data-action=create-order]').disabled"), true);
-    await input('#product-search', 'no-matching-product');
-    assert.equal(await run("document.querySelectorAll('[data-qty]').length"), 0);
-    assert.match(await mainText(), /no .*products|no .*matches|no .*results/i);
-    await input('#product-search', 'Fresh milk');
-    assert.equal(await run("document.querySelectorAll('[data-qty]').length"), 1);
-    await input('#product-search', '');
-    await input('#stock-filter', 'attention', 'change');
-    assert.equal(await run("document.querySelectorAll('[data-qty]').length"), 3);
-    await input('#stock-filter', 'healthy', 'change');
-    assert.equal(await run("document.querySelectorAll('[data-qty]').length"), 2);
-    await input('#stock-filter', 'all', 'change');
-    await click('[data-action="store-step"][data-product="0"][data-delta="1"]');
-    assert.equal(await run('quantities[0]'), 1);
-    await click('[data-action="store-step"][data-product="0"][data-delta="-1"]');
-    assert.equal(await run('quantities[0]'), 0);
-    await input('[data-qty="0"]', '-7');
-    assert.equal(await run('quantities[0]'), 0);
-    await input('[data-qty="0"]', '999');
-    assert.ok(await run('quantities[0] <= 50'), 'Excessive quantities are capped.');
-    await click('[data-action="recommended"]');
-    assert.deepEqual(await run('quantities'), [12, 10, 8, 6, 4]);
-    await capture('store', 1440);
-    await capture('store', 430);
-    await capture('store', 390);
-    await viewport(1440);
-    await click('[data-action="create-order"]');
-    assert.equal(await run("document.querySelector('#dialog').open"), true);
-    assert.match(await run("document.querySelector('#dialog').innerText"), /40 cartons/);
-    for (let i = 0; i < 8; i++) {
-      await key('Tab');
-      assert.equal(await run("document.querySelector('#dialog').contains(document.activeElement)"), true, 'Tab focus stays within the review dialog.');
+    await click('[data-action="store-replenish"]');
+    assert.equal(await run('storeDate'),'2025-01-04','Friday before cutoff suggests operating Saturday');
+    assert.equal(await run("document.querySelector('[data-action=create-order]').disabled"),true);
+    await input('#product-search','no-matching-product');
+    assert.equal(await run("document.querySelectorAll('[data-qty]').length"),0);
+    await input('#product-search','');
+    await input('#stock-filter','healthy','change');
+    assert.equal(await run("document.querySelectorAll('[data-qty]').length"),2);
+    await input('#stock-filter','all','change');
+    const prototypeBefore=await run('JSON.stringify(state)');
+    for(const temperature of ['AMBIENT','CHILLED']) {
+      await input('#store-temperature',temperature,'change');
+      const i=temperature==='AMBIENT'?2:0;
+      await input(`[data-qty="${i}"]`,'-7');assert.equal(await run(`quantities[${i}]`),0);
+      await input(`[data-qty="${i}"]`,'999');assert.equal(await run(`quantities[${i}]`),50);
+      await input(`[data-qty="${i}"]`,'3');
+      await click('[data-action="create-order"]');
+      assert.match(await run("document.querySelector('#dialog').innerText"),new RegExp(temperature.toLowerCase()));
+      for(let n=0;n<6;n++){await key('Tab');assert.equal(await run("document.querySelector('#dialog').contains(document.activeElement)"),true);}
+      await click('[data-action="place-order"]');
+      await waitFor("document.querySelector('#dialog').innerText.includes('Order confirmed for planning.')");
+      const createdId=await run("document.querySelector('.success-mark').dataset.orderId");createdOrderIds.push(createdId);
+      const created=await run(`storeOwnOrders().find(o=>o.id===${JSON.stringify(createdId)})`);
+      assert.ok(created,'Successful creation refreshes the list even when an earlier read was in flight');
+      assert.equal(created.temperatureRequirement,temperature);assert.equal(created.units,3);assert.equal(created.status,'CONFIRMED');
+      assert.equal(await run('JSON.stringify(state)'),prototypeBefore,'Store orders never mutate prototype/localStorage state');
+      await click('#dialog .dialog-actions [data-action="close"]');
+      await click(`[data-action="order-detail"][data-id="${created.id}"]`);
+      await waitFor("document.querySelector('#dialog').innerText.includes('Status history')");
+      assert.match(await run("document.querySelector('#dialog').innerText"),/Confirmed|Order created/);
+      assert.equal(await run("document.querySelectorAll('[data-action=store-confirm-receipt]').length"),0);
+      await key('Escape');
+      await run('window.qaBeforeReload=true');await send('Page.reload');await waitFor('!window.qaBeforeReload && !!storeData && !storeLoading');
+      assert.ok(await run(`storeOwnOrders().some(o=>o.id===${JSON.stringify(created.id)})`));
+      await click('[data-action="store-replenish"]');
     }
+    // A manually selected Sunday is rejected without rewriting the draft or losing quantities.
+    await input('#store-date','2025-01-05','change');
+    await run('quantities[2]=1;render()');
+    await click('[data-action="create-order"]');await click('[data-action="place-order"]');
+    await waitFor("!!document.querySelector('#store-submit-error')?.textContent");
+    assert.match(await run("document.querySelector('#store-submit-error').textContent"),/not an operating date/);
+    assert.equal(await run('storeDate'),'2025-01-05');assert.equal(await run('quantities[2]'),1);
     await key('Escape');
-    assert.equal(await run("document.querySelector('#dialog').open"), false);
-    await click('[data-action="create-order"]');
-    await click('[data-action="place-order"]');
-    assert.deepEqual((await order()).items, [12, 10, 8, 6, 4]);
-    assert.equal((await order()).cartons, 40);
-    assert.equal((await order()).weight, 376);
-    assert.equal((await order()).tempRequirement, 'chilled');
-    assert.ok((await order()).volume > 0);
-    assert.equal((await order()).dockType, 'street');
-    assert.match(await run("document.querySelector('#dialog').innerText"), /ORD-2847/);
-    assert.doesNotMatch(await run("document.querySelector('.store-tracking-card').innerText"),/Expected arrival/,'Unassigned orders have no planned ETA.');
+    orderNow=new Date('2025-01-04T16:01:00+05:30');
+    await run('loadStoreOrders()');
+    assert.equal(await run('storeDate'),'2025-01-05','Refresh preserves the explicit draft date');
+    await run("storeDate='';loadStoreOrders()");
+    assert.equal(await run('storeDate'),'2025-01-06','After cutoff, default skips closed Sunday');
+    // Exercise visible cutoff rejection with a date that input constraints alone cannot protect.
+    await run('storeDate=storeData.ordering.nextDayOpen ? storeData.ordering.today : storeData.ordering.nextDay;quantities[2]=1;render()');
+    await click('[data-action="create-order"]');await click('[data-action="place-order"]');
+    await waitFor("!!document.querySelector('#store-submit-error')?.textContent");
+    assert.match(await run("document.querySelector('#store-submit-error').textContent"),/16:00|after today/);
+    assert.equal(await run('quantities[2]'),1,'Rejected orders preserve draft quantities');
+    await screenshot('stage04-order-rejection');await key('Escape');
+    assert.equal(await run("document.querySelector('[data-action=create-order]').disabled"),false,'A rejected order can be reviewed again');
+    orderNow=new Date('9999-12-20T16:01:00+05:30');
+    await run("storeDate='';loadStoreOrders()");
+    assert.equal(await run('storeDate'),'');
+    assert.match(await mainText(),/No open operating date/);
+    orderNow=new Date('2025-01-03T15:59:00+05:30');
+    await run('loadStoreOrders()');
+    await run('storeDate=storeData.ordering.earliestDeliveryDate;quantities=products.map(()=>0);render()');
+    for(const width of [1440,430,390,360]) {await viewport(width,900);assert.ok(await run('document.documentElement.scrollWidth<=innerWidth'));await screenshot(`stage04-store-${width}`);}
+    await viewport(1440);
+    await click('[data-action="store-orders"]');await waitFor('!storeLoading');
+    assert.match(await mainText(),/Scheduled/);assert.match(await mainText(),/Deferred/);
+    // Allocation/field stages still use explicit prototype fixtures until their own API stages.
+    await run("state.orders.push(hydrateOrder({...orderDefaults,id:'ORD-2847',outletId:'OUT006',store:'Waypoint Fresh · Colombo 06',area:'Colombo 06',address:'Synthetic outlet OUT006 · Colombo',window:'03:00 – 08:00',dockType:'street',items:[12,10,8,6,4],status:'Pending',route:null,loaded:false,issue:''}));pendingDispatchOrderId='ORD-2847';save();queueQuery='stale';queueFilter='priority';dispatchPanel='vehicle'");
   });
 
   await stage('dispatch protects capacity, selects vehicles and releases the same order', async () => {
@@ -276,22 +328,11 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     assert.deepEqual(await run('({km:routeMetrics().km,minutes:routeMetrics().minutes,etas:routeMetrics().etas.map(clockTime),fuel:routeMetrics().km/activeVehicle().kmPerL})'),{km:32,minutes:87,etas:['05:09','05:33','05:56'],fuel:32/4.7});
     assert.match(await mainText(),/32 km est\./);
     assert.match(await mainText(),/87 \/ 270 min/);
-    const dispatchEta=await run("routeEta(assigned().indexOf(state.orders.find(o=>o.id==='ORD-2847')))");
-    await switchAccount('store');
-    await click('[data-action="store-orders"]');
-    assert.match(await run("document.querySelector('.store-tracking-card').innerText"),new RegExp(`Expected arrival\\s+${dispatchEta}`));
-    assert.match(await run("document.querySelector('.store-tracking-card').innerText"),/Delivery window\s+03:00 – 08:00[\s\S]*Route\s+R-07[\s\S]*Vehicle\s+VEH003/);
-    await click('[data-action="order-detail"][data-id="ORD-2847"]');
-    assert.match(await run("document.querySelector('#dialog').innerText"),new RegExp(`Expected arrival\\s+${dispatchEta}`));
-    await key('Escape');
-    await switchAccount('dispatch');
     await click('[data-action="confirm-dispatch"]');
     assert.match(await run("document.querySelector('#dialog').innerText"), /VEH003/);
     await click('[data-action="release"]');
     assert.equal(await run('state.confirmed'), true);
     assert.equal((await order()).status, 'Ready to load');
-    await switchAccount('store');
-    assert.match(await run("document.querySelector('.store-tracking-card').innerText"),new RegExp(`Expected arrival\\s+${dispatchEta}`));
     await switchAccount('loader');
     assert.match(await mainText(), /ORD-2847/);
   });
@@ -330,7 +371,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     assert.equal(await run('state.ready'), true);
   });
 
-  await stage('delivery defers exceptions, validates proof and connects receipts back to Store', async () => {
+  await stage('delivery defers exceptions and validates proof; receipt fixture supports later-stage prototype checks', async () => {
     await switchAccount('delivery');
     await click('[data-action="start-route"]');
     await capture('delivery', 390, 844);
@@ -402,56 +443,8 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     assert.ok(await run('state.pending.length > 0'));
     await click('[data-action="offline"]');
     assert.equal(await run('state.pending.length'), 0);
-    await switchAccount('store');
-    await click('[data-action="store-orders"]');
-    assert.match(await mainText(), /ORD-2847/);
-    assert.match(await mainText(), /Delivered/);
-    await click('[data-action="store-replenish"]');
-    assert.match(await run("document.querySelector('[data-product-row=\"0\"] .store-stock-cell').innerText"),/8\s+ctn[\s\S]*12 on order/,'Driver POD leaves cartons pending.');
-    await click('[data-action="store-orders"]');
-    await click('[data-action="order-detail"][data-id="ORD-2847"]');
-    assert.match(await run("document.querySelector('#dialog').innerText"), /Nimasha Perera/);
-    await key('Escape');
-    await click('[data-action="store-report-issue"][data-id="ORD-2847"]');
-    await input('#store-issue-type','Damaged goods','change');
-    await click('[data-action="save-store-issue"]');
-    assert.equal((await order()).receiptIssueType,undefined);
-    await input('#store-issue-details','Two milk cartons were damaged on arrival.');
-    await click('[data-action="save-store-issue"]');
-    assert.equal((await order()).receiptIssueType,'Damaged goods');
-    assert.equal(await run('storeStock(products[0],0).stock'),8,'Reporting an issue does not receive stock.');
-    await click('[data-action="store-confirm-receipt"][data-id="ORD-2847"]');
-    await click('[data-action="save-store-receipt"]');
-    assert.equal((await order()).receiptConfirmed,false);
-    await run("document.querySelector('#store-receipt-checked').checked=true");
-    await click('[data-action="save-store-receipt"]');
-    assert.equal((await order()).receiptConfirmed,true);
-    assert.equal((await order()).receiptConfirmedBy,'Nimasha Perera');
-    assert.equal((await order()).receiptIssueType,'Damaged goods','Confirming later preserves the Store issue.');
-    assert.match(await mainText(),/Store receipt confirmed/);
-    await click('[data-action="store-replenish"]');
-    assert.match(await run("document.querySelector('[data-product-row=\"0\"] .store-stock-cell').innerText"),/20\s+ctn/,'Store confirmation adds received cartons.');
-    assert.doesNotMatch(await run("document.querySelector('[data-product-row=\"0\"] .store-stock-cell').innerText"),/on order/);
-    await click('[data-action="store-orders"]');
-    await switchAccount('dispatch');
-    assert.equal(await run('dispatchRouteState().key'),'completed','Store issue does not reopen delivery.');
-    assert.match(await mainText(),/receipt follow-up/i);
-    await click('#plan-tab-route');
-    assert.match(await mainText(),/ORD-2847 · OUT006 · Damaged goods: Two milk cartons were damaged on arrival/);
-    assert.doesNotMatch(await mainText(),/No outstanding exceptions/);
-    await switchAccount('store');
-    await click('[data-action="store-orders"]');
-    assert.match(await mainText(),/Store receipt issue · Damaged goods/);
-    await click('[data-action="store-replenish"]');
-    assert.match(await run("document.querySelector('[data-product-row=\"0\"] .store-stock-cell').innerText"),/20\s+ctn/);
-    await switchAccount('dispatch');
-    await run("dispatchPanel='route';render()");
-    await click('[data-action="select-stop"][data-id="ORD-2847"]');
-    assert.match(await run("document.querySelector('#dialog').innerText"),/Store receipt confirmed by Nimasha Perera/);
-    assert.match(await run("document.querySelector('#dialog').innerText"),/Store receipt issue: Damaged goods/);
-    await key('Escape');
-    await switchAccount('store');
-    await screenshot('store-delivered');
+    // Receipt operations belong to Stage 7. Fixture keeps existing dispatcher follow-up coverage.
+    await run("const receiptFixture=state.orders.find(o=>o.id==='ORD-2847');Object.assign(receiptFixture,{receiptConfirmed:true,receiptConfirmedBy:'Nimasha Perera',receiptConfirmedAt:'10:30',receiptIssueType:'Damaged goods',receiptIssueDetails:'Two milk cartons were damaged on arrival.'});save()");
   });
 
   await stage('completed route is consistent across dispatcher, vehicle and receipts', async () => {
@@ -494,43 +487,12 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     }
   });
 
-  await stage('authenticated handoffs reveal new orders without resetting the route', async () => {
+  await stage('Store reload and account handoffs preserve server orders without changing the prototype route', async () => {
     const completedState=await run('JSON.stringify(state)');
-    try {
-      for (const navigation of ['sidebar','hash']) {
-        await viewport(navigation==='sidebar'?390:1024,900);
-        await login('store');
-        await run("state=seed();save();pendingDispatchOrderId=null;revealedDispatchOrderId=null;queueQuery='hidden';queueFilter='priority';dispatchPanel='vehicle';role='store';tab='replenishment';location.hash='store';render()");
-        await click('[data-action="recommended"]');
-        await click('[data-action="create-order"]');
-        await click('[data-action="place-order"]');
-        await click('#dialog .dialog-actions [data-action="close"]');
-        if(navigation==='sidebar')await switchAccount('dispatch');
-        else {await run("location.hash='dispatch'");await waitFor("location.hash==='#store'");await switchAccount('dispatch');}
-        await waitFor("role==='dispatch' && document.activeElement?.dataset.id==='ORD-2847'");
-        const visible=await run(`(() => {const el=document.querySelector('#queue-list .order-card');const r=el.getBoundingClientRect();return {id:el.querySelector('[data-action=select-order]').dataset.id,top:r.top,bottom:r.bottom};})()`);
-        assert.equal(visible.id,'ORD-2847');
-        assert.ok(visible.top>=0&&visible.bottom<=900-(navigation==='sidebar'?72:0),'New order card is visible without searching or scrolling.');
-        assert.equal(await run('assigned().length'),2,'The existing route is preserved.');
-        assert.equal(await run('state.confirmed'),false);
-        assert.equal(await run('state.offline'),false);
-        await screenshot(`dispatch-handoff-${navigation}`);
-      }
-      // A post-release Store request must also appear, while the completed route stays intact.
-      await login('store');
-      await run(`state=JSON.parse(${JSON.stringify(completedState)});save();queueQuery='hidden';queueFilter='priority';dispatchPanel='vehicle';role='store';tab='replenishment';render()`);
-      await click('[data-action="store-step"][data-product="0"][data-delta="1"]');
-      await click('[data-action="create-order"]');await click('[data-action="place-order"]');
-      await click('#dialog .dialog-actions [data-action="close"]');
-      await switchAccount('dispatch');
-      await waitFor("document.activeElement?.dataset.id==='ORD-2848'");
-      assert.equal(await run('dispatchRouteState().key'),'completed');
-      assert.equal(await run("state.orders.find(o=>o.id==='ORD-2848').nextRun"),true);
-      assert.match(await mainText(),/Next run · window pending/);
-    } finally {
-      await login('dispatcher');
-      await run(`state=JSON.parse(${JSON.stringify(completedState)});save();pendingDispatchOrderId=null;revealedDispatchOrderId=null;role='dispatch';render()`);
-    }
+    await switchAccount('store');await click('[data-action="store-orders"]');await waitFor('!storeLoading');
+    for(const id of createdOrderIds)assert.ok(await run(`storeOwnOrders().some(o=>o.id===${JSON.stringify(id)})`));
+    await switchAccount('dispatch');assert.equal(await run('JSON.stringify(state)'),completedState);
+    assert.equal(await run('dispatchRouteState().key'),'completed');
   });
 
   await t.test('field sheets, long notes and route focus remain accessible', async () => {
@@ -572,9 +534,11 @@ test('Relay: connected order, planning constraints, field exceptions and respons
       const note=await run("(() => {const el=document.querySelector('.shipment-exception p');const card=el.closest('.shipment').getBoundingClientRect();const r=el.getBoundingClientRect();return {right:r.right,cardRight:card.right,client:el.clientWidth,scroll:el.scrollWidth}})()");
       assert.ok(note.right<=note.cardRight && note.scroll<=note.client+1,'Long exception notes wrap inside the shipment.');
       await login('store');
-      await run("role='store';tab='orders';assigned()[0].outletId='OUT006';assigned()[0].store='Waypoint Fresh · Colombo 06';assigned()[0].area='Colombo 06';assigned()[0].status='Delivered';assigned()[0].recipient='A'.repeat(80);assigned()[0].deliveredAt='06:25';render()");
+      await waitFor('!!storeData && !storeLoading');
+      await click('[data-action="store-orders"]');await waitFor('!storeLoading');
       await click('[data-action="order-detail"]');
-      assert.equal(await run("document.querySelector('.dialog-body').scrollWidth<=document.querySelector('.dialog-body').clientWidth"),true,'Long recipient names fit the receipt.');
+      await waitFor("document.querySelector('#dialog').innerText.includes('Status history')");
+      assert.equal(await run("document.querySelector('.dialog-body').scrollWidth<=document.querySelector('.dialog-body').clientWidth"),true,'Persisted order details fit the sheet.');
       await key('Escape');
     } finally {
       await login('dispatcher');

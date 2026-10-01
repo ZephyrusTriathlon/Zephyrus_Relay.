@@ -142,3 +142,8 @@
 }
 @media(max-width:375px){.store-table .store-product-row{padding:14px;gap:14px 10px}.store-stock-signal p{max-width:240px}.store-stock-signal{align-items:flex-start}.store-signal-icon{margin-top:3px}.store-tracking-card{padding:16px 14px}.store-toolbar .tabs{gap:20px}.store-mobile-action{gap:12px}.store-summary .store-mobile-action .btn{padding-inline:12px}}
 @media(max-width:760px){.store-table .store-product-row .store-health-cell{display:flex}.store-delivery-signal{padding:12px 16px}.store-delivery-signal p{max-width:none}.store-tracking-card .lifecycle li{font-size:12px}.store-product-row .product-symbol{display:none}.store-table .store-product-row{row-gap:12px}.store-product-row .store-stock-cell{font-size:16px}.store-mobile-availability{font-size:12px}.store-quantity-caption{margin-bottom:5px}}
+/* Persisted order numbers and API descriptions can be longer than demo labels. */
+.store-tracking-card h3, .store-tracking-card p, .store-tracking-card .notice,
+.store-review-line b { overflow-wrap: anywhere; min-width: 0; }
+.store-filters label { min-width: 0; }
+.store-filters input[type="date"] { max-width: 100%; }

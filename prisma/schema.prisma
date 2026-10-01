@@ -226,10 +226,21 @@ model Order {
   items                 OrderItem[]
   allocation            Allocation?
   deferrals             Deferral[]
+  history               OrderStatusEvent[]
   @@unique([id, outletId])
   // Deliberately not unique: Fresh may order multiple times on one delivery date.
   @@index([outletId, deliveryDate])
   @@index([deliveryDate, status])
+}
+
+model OrderStatusEvent {
+  id        String @id @default(uuid())
+  orderId   String
+  order     Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  status    OrderStatus
+  occurredAt DateTime @default(now()) @db.Timestamptz(6)
+  note      String
+  @@index([orderId, occurredAt])
 }
 
 model OrderItem {

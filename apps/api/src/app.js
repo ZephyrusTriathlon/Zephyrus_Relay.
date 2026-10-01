@@ -1,16 +1,18 @@
+import { installAuth } from './auth.js';
 import express from 'express';
 import helmet from 'helmet';
 import { fileURLToPath } from 'node:url';
 import { developmentReads } from './routes/development.js';
 import { publicPath, containedFile, legacyScripts, notFound } from '../../web/static-policy.js';
 const defaultWebRoot = fileURLToPath(new URL('../../web/dist/', import.meta.url));
-export function createApp({ webRoot = defaultWebRoot, devReads = false, database } = {}) {
+export function createApp({ webRoot = defaultWebRoot, devReads = false, database, ...authOptions } = {}) {
   const app = express();
   app.disable('x-powered-by');
   app.use(helmet({ contentSecurityPolicy: { directives: { 'upgrade-insecure-requests': null } } }));
   app.use((req, res, next) => publicPath(req.url) === null ? notFound(res) : next());
   app.use('/api', express.json({ limit: '100kb' }));
   app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'zephyrus-relay-api' }));
+  app.locals.sessionStore = installAuth(app, { database, ...authOptions });
   app.use('/api', developmentReads({ enabled: devReads, database }));
   app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
   app.use((req, res, next) => {
@@ -22,7 +24,7 @@ export function createApp({ webRoot = defaultWebRoot, devReads = false, database
   app.use((error, _req, res, next) => {
     if (res.headersSent) return next(error);
     const status = error.status === 400 ? 400 : error.status === 413 ? 413 : 500;
-    if (status === 500) console.error(error);
+    if (status === 500) console.error('API request failed');
     res.status(status).json({ error: status === 400 ? 'Invalid JSON' : status === 413 ? 'Request body too large' : 'Internal server error' });
   });
   return app;

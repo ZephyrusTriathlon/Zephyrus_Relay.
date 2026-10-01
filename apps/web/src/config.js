@@ -5,3 +5,5 @@ export async function getHealth() {
   if (!response.ok) throw new Error(`API health request failed (${response.status})`);
   return response.json();
 }
+
+window.relayDevTools = import.meta.env.VITE_ENABLE_DEV_TOOLS === 'true';

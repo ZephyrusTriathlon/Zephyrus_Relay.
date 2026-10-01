@@ -8,8 +8,10 @@ const config = z.object({
   RELAY_DEV_READS: z.enum(['true', 'false']).default('false')
 }).parse(process.env);
 if (config.RELAY_DEV_READS === 'true' && process.env.NODE_ENV === 'production') throw new Error('Development read APIs cannot be enabled in production');
-const server = createApp({ devReads: config.RELAY_DEV_READS === 'true' }).listen(config.PORT, config.HOST, () => {
+const app = createApp({ devReads: config.RELAY_DEV_READS === 'true' });
+if (process.env.TRUST_PROXY === 'true') app.set('trust proxy', 1);
+const server = app.listen(config.PORT, config.HOST, () => {
   console.log(`Relay API running at http://${config.HOST}:${config.PORT}`);
 });
 server.on('error', error => { console.error(error.message); process.exitCode = 1; });
-for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => server.close(() => closeDatabase()));
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => server.close(async () => { await app.locals.sessionStore.close(); await closeDatabase(); }));

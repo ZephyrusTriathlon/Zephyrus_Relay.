@@ -2,9 +2,15 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { connect } = require('./cdp');
 
-test('Relay: connected order, planning constraints, field exceptions and responsive views', { timeout: 120000 }, async t => {
+test('Relay: connected order, planning constraints, field exceptions and responsive views', { timeout: 240000 }, async t => {
   const browser = await connect();
-  const { run, send, click, input, key, viewport, screenshot, waitFor } = browser;
+  const { send, input, key, viewport, screenshot, waitFor } = browser;
+  const login = async id => {
+    await browser.run(`(async()=>{await authRequest('logout',{});await authRequest('login',{identifier:${JSON.stringify(id)},password:'RelayDemo!26'});await refreshIdentity();const reveal=role==='dispatch'&&pendingDispatchOrderId&&dispatchHandoff(pendingDispatchOrderId);if(reveal){render();finishDispatchHandoff();}})()`);
+  };
+  const run = browser.run;
+  const click = async selector => { await browser.click(selector); if(selector.includes('sign-out'))await waitFor("!!document.querySelector('#login-form')"); };
+
   let previousStorage, previousSession;
   t.after(async () => {
     if (previousStorage !== undefined) {
@@ -13,6 +19,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
         : `localStorage.setItem('relay-v1', ${JSON.stringify(previousStorage)})`).catch(() => {});
     }
     if(previousSession!==undefined)await run(previousSession===null?"localStorage.removeItem('relay_session')":`localStorage.setItem('relay_session',${JSON.stringify(previousSession)})`).catch(()=>{});
+    await run("authRequest('logout',{})").catch(()=>{});
     await browser.close();
   });
   await viewport(1440);
@@ -20,19 +27,25 @@ test('Relay: connected order, planning constraints, field exceptions and respons
   previousSession = await run("localStorage.getItem('relay_session')");
   previousStorage = await run("localStorage.getItem('relay-v1')");
   const unrelatedStorage = await run("Object.fromEntries(Object.entries(localStorage).filter(([key]) => !['relay-v1','relay_session'].includes(key)))");
-  await run("state=seed(); save(); localStorage.setItem('relay_session','dispatcher');role='dispatch'; render()");
+  await login('dispatcher');
+  await run("state=seed(); save();role='dispatch'; render()");
 
   const switchAccount = async workspace => {
-    await click('.nav [data-action="account"]');
-    await click('#dialog [data-action="switch-account"]');
+    if(await run('!!currentAccount()')) {
+      await run('closeDialog()');
+      await click('.nav [data-action="account"]');
+      await click('#dialog [data-action="sign-out"]');
+    }
     const id={store:'store',dispatch:'dispatcher',loader:'loader',delivery:'driver'}[workspace];
-    await click(`[data-account="${id}"]`);
+    await input('#login-id',id);await input('#login-password','RelayDemo!26');
+    await click('#login-form [type="submit"]');
+    await waitFor(`currentAccount()?.workspace===${JSON.stringify(workspace)}`);
     assert.equal(await run('currentAccount().workspace'),workspace);
   };
 
-  await t.test('simulated login, fixed roles, session isolation and responsive account access', async () => {
-    const submitLogin=async()=>{await run("document.querySelector('#login-password').focus()");await send('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',windowsVirtualKeyCode:13,text:'\r'});await send('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',windowsVirtualKeyCode:13});};
-    await run("localStorage.removeItem('relay_session');render()");
+  await t.test('server login, fixed roles, session isolation and responsive account access', async () => {
+    const submitLogin=async()=>{await run("document.querySelector('#login-password').focus()");await send('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',windowsVirtualKeyCode:13,text:'\r'});await send('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',windowsVirtualKeyCode:13});await waitFor("!document.querySelector('#login-form') || !document.querySelector('#login-form [type=submit]').disabled");};
+    await run('signOut()');
     assert.ok(await run("!!document.querySelector('#login-form')"));
     await click('#login-form [type="submit"]');
     assert.match(await run("document.querySelector('#login-error').textContent"),/employee ID/);
@@ -53,7 +66,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
       await input('#login-id',`${id}@relay.demo`);await input('#login-password','RelayDemo!26');await submitLogin();
       assert.equal(await run('role'),workspace);
       assert.equal(await run("document.querySelectorAll('#app [data-role]').length"),0);
-      assert.equal(await run('currentAccount().id'),id);
+      assert.equal(await run('currentAccount().email'),`${id}@relay.demo`);
       assert.equal(await run("document.querySelector('.topbar')"),null);
       assert.deepEqual(await run("[...document.querySelectorAll('.nav button')].map(button=>button.dataset.action)"),['workspace-home','account','activity']);
       await click('.nav [data-action="activity"]');
@@ -65,7 +78,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
         assert.equal(await run('document.body.dataset.role'),workspace);
       }
       await run('window.qaBeforeReload=true');await send('Page.reload');await waitFor(`!window.qaBeforeReload && !!document.querySelector('.view-${workspace}')`);
-      assert.equal(await run('currentAccount().id'),id);
+      assert.equal(await run('currentAccount().email'),`${id}@relay.demo`);
       await click('.nav [data-action="account"]');
       assert.match(await run("document.querySelector('#dialog').innerText"),new RegExp(await run('currentAccount().name')));
       await click('[data-action="sign-out"]');
@@ -75,9 +88,22 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     }
     await input('#login-id','store');await input('#login-password','RelayDemo!26');await submitLogin();
     await switchAccount('dispatch');assert.equal(await run('JSON.stringify(state)'),saved);
-    await click('.nav [data-action="account"]');await click('#dialog [data-action="switch-account"]');
+    await click('.nav [data-action="account"]');
     await key('Tab');assert.ok(await run("document.querySelector('#dialog').contains(document.activeElement)"));
     await key('Escape');await viewport(1440);
+  });
+
+  await t.test('server rejects forged local roles and expired sessions return to login', async () => {
+    await switchAccount('store');
+    await run("localStorage.setItem('relay_session','dispatcher');location.hash='dispatch'");
+    await waitFor("location.hash==='#store'");
+    assert.equal(await run("fetch('/api/dispatcher/scope').then(r=>r.status)"),403);
+    assert.equal(await run("fetch('/api/driver/scope').then(r=>r.status)"),403);
+    assert.equal(await run("document.querySelectorAll('[data-action=\"switch-account\"],[data-action=\"demo-sign-in\"]').length"),0);
+    await run("(async()=>{await authRequest('logout',{});await refreshIdentity();})()");
+    assert.match(await run("document.querySelector('#login-error').textContent"),/expired/);
+    await run("localStorage.removeItem('relay_session')");
+    await switchAccount('dispatch');
   });
 
   const mainText = () => run("document.querySelector('#main').innerText");
@@ -89,7 +115,8 @@ test('Relay: connected order, planning constraints, field exceptions and respons
   });
   const capture = async (roleName, width, height) => {
     await viewport(width, height);
-    await run(`localStorage.setItem('relay_session',demoAccounts.find(a=>a.workspace===${JSON.stringify(roleName)}).id);role=${JSON.stringify(roleName)}; render(); window.scrollTo(0, 0)`);
+    await login(({store:'store',dispatch:'dispatcher',loader:'loader',delivery:'driver'})[roleName]);
+    await run(`role=${JSON.stringify(roleName)}; render(); window.scrollTo(0, 0)`);
     await screenshot(`${roleName}-${width}`);
     if (width < 500) await screenshot(`${roleName}-${width}-viewport`, false);
   };
@@ -222,8 +249,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
   });
 
   await stage('dispatch protects capacity, selects vehicles and releases the same order', async () => {
-    await click('[data-action="go-dispatch"]');
-    await click('[data-account="dispatcher"]');
+    await switchAccount('dispatch');
     await waitFor("document.activeElement?.dataset.id === 'ORD-2847'", 'new order receives focus');
     assert.deepEqual(await run('({panel:dispatchPanel,query:queueQuery,filter:queueFilter,selected:selectedOrderId})'), {panel:'queue',query:'',filter:'all',selected:'ORD-2847'});
     assert.equal(await run("document.querySelector('#queue-list .order-card [data-action=select-order]').dataset.id"), 'ORD-2847');
@@ -468,12 +494,13 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     }
   });
 
-  await stage('demo account handoffs reveal new orders without resetting the route', async () => {
+  await stage('authenticated handoffs reveal new orders without resetting the route', async () => {
     const completedState=await run('JSON.stringify(state)');
     try {
       for (const navigation of ['sidebar','hash']) {
         await viewport(navigation==='sidebar'?390:1024,900);
-        await run("state=seed();save();pendingDispatchOrderId=null;revealedDispatchOrderId=null;queueQuery='hidden';queueFilter='priority';dispatchPanel='vehicle';localStorage.setItem('relay_session','store');role='store';tab='replenishment';location.hash='store';render()");
+        await login('store');
+        await run("state=seed();save();pendingDispatchOrderId=null;revealedDispatchOrderId=null;queueQuery='hidden';queueFilter='priority';dispatchPanel='vehicle';role='store';tab='replenishment';location.hash='store';render()");
         await click('[data-action="recommended"]');
         await click('[data-action="create-order"]');
         await click('[data-action="place-order"]');
@@ -490,7 +517,8 @@ test('Relay: connected order, planning constraints, field exceptions and respons
         await screenshot(`dispatch-handoff-${navigation}`);
       }
       // A post-release Store request must also appear, while the completed route stays intact.
-      await run(`state=JSON.parse(${JSON.stringify(completedState)});save();queueQuery='hidden';queueFilter='priority';dispatchPanel='vehicle';localStorage.setItem('relay_session','store');role='store';tab='replenishment';render()`);
+      await login('store');
+      await run(`state=JSON.parse(${JSON.stringify(completedState)});save();queueQuery='hidden';queueFilter='priority';dispatchPanel='vehicle';role='store';tab='replenishment';render()`);
       await click('[data-action="store-step"][data-product="0"][data-delta="1"]');
       await click('[data-action="create-order"]');await click('[data-action="place-order"]');
       await click('#dialog .dialog-actions [data-action="close"]');
@@ -500,14 +528,16 @@ test('Relay: connected order, planning constraints, field exceptions and respons
       assert.equal(await run("state.orders.find(o=>o.id==='ORD-2848').nextRun"),true);
       assert.match(await mainText(),/Next run · window pending/);
     } finally {
-      await run(`state=JSON.parse(${JSON.stringify(completedState)});save();pendingDispatchOrderId=null;revealedDispatchOrderId=null;localStorage.setItem('relay_session','dispatcher');role='dispatch';render()`);
+      await login('dispatcher');
+      await run(`state=JSON.parse(${JSON.stringify(completedState)});save();pendingDispatchOrderId=null;revealedDispatchOrderId=null;role='dispatch';render()`);
     }
   });
 
   await t.test('field sheets, long notes and route focus remain accessible', async () => {
     const savedState = await run('JSON.stringify(state)');
     try {
-      await run("state=seed();localStorage.setItem('relay_session','driver');role='delivery';fieldRouteOpen=false;state.confirmed=state.ready=state.started=true;assigned().forEach(o=>{o.loaded=true;o.status='In transit';o.arrived=true});render()");
+      await login('driver');
+      await run("state=seed();role='delivery';fieldRouteOpen=false;state.confirmed=state.ready=state.started=true;assigned().forEach(o=>{o.loaded=true;o.status='In transit';o.arrived=true});render()");
       assert.equal(await run("document.querySelectorAll('#main h1').length"), 1);
       for (const [width,height] of [[360,640],[390,844],[430,932],[768,900],[1440,900]]) {
         await viewport(width,height);
@@ -537,21 +567,25 @@ test('Relay: connected order, planning constraints, field exceptions and respons
       assert.equal(await run('qaScrollOptions.at(-1).behavior'),'instant');
       await click('.driver-route-close');
       assert.equal(await run("document.activeElement.matches('.driver-progress-label [data-action=field-route-toggle]')"),true);
-      await run("Element.prototype.scrollIntoView=qaOriginalScroll;delete window.qaOriginalScroll;delete window.qaScrollOptions;localStorage.setItem('relay_session','loader');role='loader';state.ready=false;assigned().forEach(o=>o.loaded=false);assigned()[1].issue='Damaged carton: '+ 'X'.repeat(200);assigned()[1].issueType='Damaged cartons';render()");
+      await login('loader');
+      await run("Element.prototype.scrollIntoView=qaOriginalScroll;delete window.qaOriginalScroll;delete window.qaScrollOptions;role='loader';state.ready=false;assigned().forEach(o=>o.loaded=false);assigned()[1].issue='Damaged carton: '+ 'X'.repeat(200);assigned()[1].issueType='Damaged cartons';render()");
       const note=await run("(() => {const el=document.querySelector('.shipment-exception p');const card=el.closest('.shipment').getBoundingClientRect();const r=el.getBoundingClientRect();return {right:r.right,cardRight:card.right,client:el.clientWidth,scroll:el.scrollWidth}})()");
       assert.ok(note.right<=note.cardRight && note.scroll<=note.client+1,'Long exception notes wrap inside the shipment.');
-      await run("localStorage.setItem('relay_session','store');role='store';tab='orders';assigned()[0].outletId='OUT006';assigned()[0].store='Waypoint Fresh · Colombo 06';assigned()[0].area='Colombo 06';assigned()[0].status='Delivered';assigned()[0].recipient='A'.repeat(80);assigned()[0].deliveredAt='06:25';render()");
+      await login('store');
+      await run("role='store';tab='orders';assigned()[0].outletId='OUT006';assigned()[0].store='Waypoint Fresh · Colombo 06';assigned()[0].area='Colombo 06';assigned()[0].status='Delivered';assigned()[0].recipient='A'.repeat(80);assigned()[0].deliveredAt='06:25';render()");
       await click('[data-action="order-detail"]');
       assert.equal(await run("document.querySelector('.dialog-body').scrollWidth<=document.querySelector('.dialog-body').clientWidth"),true,'Long recipient names fit the receipt.');
       await key('Escape');
     } finally {
-      await run(`if(window.qaOriginalScroll)Element.prototype.scrollIntoView=qaOriginalScroll;document.querySelector('#dialog').close();state=JSON.parse(${JSON.stringify(savedState)});localStorage.setItem('relay_session','dispatcher');role='dispatch';fieldRouteOpen=false;render()`);
+      await login('dispatcher');
+      await run(`if(window.qaOriginalScroll)Element.prototype.scrollIntoView=qaOriginalScroll;document.querySelector('#dialog').close();state=JSON.parse(${JSON.stringify(savedState)});role='dispatch';fieldRouteOpen=false;render()`);
       await send('Emulation.setEmulatedMedia',{features:[]});
     }
   });
 
   await t.test('design case study is absent from the application', async () => {
-    await run("localStorage.setItem('relay_session','dispatcher');role='dispatch';render()");
+    await login('dispatcher');
+    await run("role='dispatch';render()");
     assert.equal(await run("document.querySelector('script[src=\"src/scripts/case-study.js\"],link[href=\"src/styles/case-study.css\"]')"),null);
     await click('.nav [data-action="account"]');
     assert.equal(await run("document.querySelector('#dialog [data-action=\"case-study\"]')"),null);
@@ -565,7 +599,8 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     const savedState = await run('JSON.stringify(state)');
     try {
       await viewport(1440, 1000);
-      await run("state=seed();localStorage.setItem('relay_session','dispatcher');role='dispatch';dispatchPanel='queue';render()");
+      await login('dispatcher');
+      await run("state=seed();role='dispatch';dispatchPanel='queue';render()");
       assert.equal(await run("document.querySelectorAll('.constraint-check').length"), 7);
       assert.equal(await run("planChecks().every(check=>check[2])"), true);
       await click('[data-action="assign"][data-id="ORD-2846"]');
@@ -584,7 +619,8 @@ test('Relay: connected order, planning constraints, field exceptions and respons
       assert.match(await run("document.querySelector('#dialog').innerText"), /reefer vehicles and drivers on standby/);
       await key('Escape');
     } finally {
-      await run(`state=JSON.parse(${JSON.stringify(savedState)});save();localStorage.setItem('relay_session','dispatcher');role='dispatch';render()`);
+      await login('dispatcher');
+      await run(`state=JSON.parse(${JSON.stringify(savedState)});save();role='dispatch';render()`);
     }
   });
 
@@ -594,12 +630,13 @@ test('Relay: connected order, planning constraints, field exceptions and respons
       await switchAccount('store');
       await click('.nav [data-action="account"]');await click('[data-action="sign-out"]');
       assert.equal(await run("localStorage.getItem('relay-v1')"),completed);
-      await click('[data-action="switch-account"]');await click('[data-account="store"]');
+      await switchAccount('store');
       assert.equal(await run('JSON.stringify(state)'),completed);
-      assert.equal(await run('currentAccount().id'),'store');
+      assert.equal(await run('currentAccount().email'),'store@relay.demo');
       assert.equal(await run('role'),'store');
     } finally {
-      await run(`state=JSON.parse(${JSON.stringify(completed)});save();enterAccount('dispatcher')`);
+      await login('dispatcher');
+      await run(`state=JSON.parse(${JSON.stringify(completed)});save();render()`);
     }
   });
 
@@ -608,7 +645,8 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     for (const width of [360, 390, 430, 768, 834, 1024, 1280, 1440]) {
       await viewport(width, 1000);
       for (const persona of ['store', 'dispatch', 'loader', 'delivery']) {
-        await run(`localStorage.setItem('relay_session',demoAccounts.find(a=>a.workspace===${JSON.stringify(persona)}).id);role=${JSON.stringify(persona)}; tab='replenishment'; render()`);
+        await login(({store:'store',dispatch:'dispatcher',loader:'loader',delivery:'driver'})[persona]);
+        await run(`role=${JSON.stringify(persona)}; tab='replenishment'; render()`);
         const overflow = await run('({ viewport: innerWidth, document: document.documentElement.scrollWidth })');
         assert.ok(overflow.document <= overflow.viewport, `${persona} overflows at ${width}: ${JSON.stringify(overflow)}`);
         assert.equal(await run("document.querySelectorAll('#main h1').length > 0"), true);

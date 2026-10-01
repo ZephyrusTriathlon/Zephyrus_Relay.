@@ -24,16 +24,28 @@ test('development data reads are off by default', async () => {
 
 test('development reads sanitize database errors and enforce query bounds', async () => {
   const { createApp } = await import('../apps/api/src/app.js');
-  const failing = createApp({ devReads: true, database: () => { throw new Error('SECRET_DATABASE_DETAIL'); } }).listen(0, '127.0.0.1');
+  const { default: session } = await import('express-session');
+  const { default: bcrypt } = await import('bcrypt');
+  const passwordHash = await bcrypt.hash('test-password', 4);
+  const user = { id: 'test-dispatcher', role: 'DISPATCHER', active: true, passwordHash };
+  const failing = createApp({ devReads: true, sessionStore: new session.MemoryStore(), database: () => ({
+    user: { findUnique: async ({select}) => Object.fromEntries(Object.keys(select).map(key => [key, user[key]])) },
+    outlet: { findMany: () => {throw new Error('SECRET_DATABASE_DETAIL');} },
+    vehicle: { findMany: () => {throw new Error('SECRET_DATABASE_DETAIL');} },
+    order: { findMany: () => {throw new Error('SECRET_DATABASE_DETAIL');} }
+  }) }).listen(0, '127.0.0.1');
   await new Promise(resolve => failing.once('listening', resolve));
   try {
     const url = `http://127.0.0.1:${failing.address().port}`;
+    assert.equal((await fetch(url + '/api/outlets')).status, 401);
+    const login = await fetch(url + '/api/auth/login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ identifier:'dispatcher',password:'test-password' }) });
+    const headers = { cookie: login.headers.get('set-cookie').split(';')[0] };
     for (const endpoint of ['/api/outlets', '/api/vehicles', '/api/demo-day']) {
-      const response = await fetch(url + endpoint);
+      const response = await fetch(url + endpoint, { headers });
       assert.equal(response.status, 503);
       assert.deepEqual(await response.json(), { error: 'Database unavailable' });
     }
-    for (const query of ['?limit=0', '?limit=51', '?offset=-1', '?limit=no', '?include=users', '?limit=1&limit=2']) assert.equal((await fetch(url + '/api/outlets' + query)).status, 400);
+    for (const query of ['?limit=0', '?limit=51', '?offset=-1', '?limit=no', '?include=users', '?limit=1&limit=2']) assert.equal((await fetch(url + '/api/outlets' + query, { headers })).status, 400);
     const previous = process.env.NODE_ENV;
     try {
       process.env.NODE_ENV = 'production';

@@ -1,3 +1,4 @@
+import { requireRole } from '../auth.js';
 import { Router } from 'express';
 import { z } from 'zod';
 import { getDatabase } from '../db.js';
@@ -16,6 +17,7 @@ export function developmentReads({ enabled = false, database = getDatabase } = {
     res.set('Cache-Control', 'no-store');
     next();
   });
+  router.use(requireRole('DISPATCHER'));
   function read(model, select) {
     return async (req, res) => {
       const parsed = pageSchema.safeParse(req.query);

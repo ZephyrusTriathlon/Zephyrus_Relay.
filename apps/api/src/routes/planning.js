@@ -106,5 +106,59 @@ export function planningRoutes({database=getDatabase}={}) {
     },{timeout:60000,maxWait:10000});
     res.json(result);
   }));
+  // Draft edits preserve allocation identity; only vehicle, departure and stop order
+  // are mutable here. All writers use the same lock as assisted allocation.
+  router.post('/edit',run(async(req,res)=>{
+    const parsed=z.strictObject({date:z.iso.date(),tripId:z.string().min(1),version:z.string().datetime(),vehicleId:z.string().min(1),departureMinute:z.number().int().min(0).max(1439),orderIds:z.array(z.string()).min(1).max(200)}).safeParse(req.body);
+    if(!parsed.success)throw error('INVALID_PLANNING_INPUT','Provide a draft version, vehicle, departure and ordered manifest.');
+    const input=parsed.data;
+    const result=await database().$transaction(async tx=>{
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(76605)`;
+      const c=await context(tx,input.date),trip=c.trips.find(t=>t.id===input.tripId&&key(t.deliveryDate)===input.date);
+      if(!trip||trip.status!=='DRAFT'||trip.updatedAt.toISOString()!==input.version)throw error('PLANNING_CONFLICT','Draft changed; reload before editing.',409);
+      const orders=trip.stops.flatMap(s=>s.allocations.map(a=>a.order));
+      if(orders.some(o=>o.status!=='PLANNED'||key(o.deliveryDate)!==input.date))throw error('INVALID_PLAN','Draft orders must remain planned for this date.',409);
+      if(input.orderIds.length!==orders.length||new Set(input.orderIds).size!==orders.length||input.orderIds.some(id=>!orders.some(o=>o.id===id)))throw error('INVALID_PLANNING_INPUT','Manual review must retain every order in this manifest exactly once.');
+      const vehicle=c.vehicles.find(v=>v.id===input.vehicleId);
+      const validation=validateTrip({...c,date:input.date,id:trip.id,vehicle,orders:input.orderIds.map(id=>orders.find(o=>o.id===id)),departureMinute:input.departureMinute});
+      if(!validation.feasible)return {accepted:false,...validation};
+      // Reserve a distinct sequence when moving onto another vehicle.
+      let sequence=trip.sequence;
+      if(vehicle.id!==trip.vehicleId){sequence=1;while(c.trips.some(t=>t.vehicleId===vehicle.id&&key(t.deliveryDate)===input.date&&t.sequence===sequence))sequence++;}
+      for(const stop of trip.stops)await tx.tripStop.update({where:{id:stop.id},data:{position:stop.position+10000}});
+      for(const [i,stop] of validation.metrics.stops.entries())await tx.tripStop.update({where:{id:trip.stops.find(s=>s.outletId===stop.outletId).id},data:{position:i+1,expectedAt:at(input.date,stop.arrivalMinute)}});
+      await tx.trip.update({where:{id:trip.id},data:{vehicleId:vehicle.id,depotId:vehicle.depotId,sequence,plannedDepartureAt:at(input.date,input.departureMinute),planningContext:{...trip.planningContext,metrics:validation.metrics,review:{actorId:req.user.id,at:new Date().toISOString(),explanation:'Dispatcher changed vehicle, departure or stop order; server validation passed.'}}}});
+      return {accepted:true,...validation};
+    },{timeout:60000,maxWait:10000});
+    res.json(result);
+  }));
+  router.post('/release',run(async(req,res)=>{
+    const parsed=z.strictObject({date:z.iso.date()}).safeParse(req.body);
+    if(!parsed.success)throw error('INVALID_PLANNING_INPUT','Provide the planning date.');
+    const {date}=parsed.data;
+    const result=await database().$transaction(async tx=>{
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(76605)`;
+      const c=await context(tx,date),drafts=c.trips.filter(t=>key(t.deliveryDate)===date&&t.status==='DRAFT');
+      // Recompute every draft before cross-validating, so stale metric snapshots
+      // cannot hide changed order quantities, travel or vehicle efficiency.
+      const candidates=drafts.map(trip=>{
+        const orders=trip.stops.flatMap(s=>s.allocations.map(a=>a.order));
+        if(!trip.plannedDepartureAt||orders.some(o=>o.status!=='PLANNED'||key(o.deliveryDate)!==date))throw error('INVALID_PLAN','Draft manifest or order status is invalid.',409);
+        const input={...c,date,id:trip.id,vehicle:trip.vehicle,orders,departureMinute:businessMinute(trip.plannedDepartureAt)};
+        return {trip,input,validation:validateTrip({...input,existingTrips:[]})};
+      });
+      const reservations=[...c.existingTrips.filter(t=>!drafts.some(d=>d.id===t.id)),...candidates.map(({trip,validation})=>({id:trip.id,vehicleId:trip.vehicleId,date,...validation.metrics}))];
+      const checked=candidates.map(candidate=>({...candidate,validation:validateTrip({...candidate.input,existingTrips:reservations})}));
+      const invalid=checked.filter(c=>!c.validation.feasible);
+      if(invalid.length)return {released:false,violations:invalid.flatMap(c=>c.validation.violations.map(v=>({...v,tripId:c.trip.id}))),trips:[]};
+      const now=new Date().toISOString();
+      for(const {trip,validation} of checked){
+        for(const stop of validation.metrics.stops)await tx.tripStop.update({where:{id:trip.stops.find(s=>s.outletId===stop.outletId).id},data:{expectedAt:at(date,stop.arrivalMinute)}});
+        await tx.trip.update({where:{id:trip.id},data:{status:'RELEASED',planningContext:{...trip.planningContext,policy:PLANNING_POLICY,metrics:validation.metrics,release:{actorId:req.user.id,at:now}}}});
+      }
+      return {released:true,trips:checked.map(c=>({id:c.trip.id,status:'RELEASED'})),violations:[]};
+    },{timeout:60000,maxWait:10000});
+    res.status(result.released?200:409).json(result);
+  }));
   return router;
 }

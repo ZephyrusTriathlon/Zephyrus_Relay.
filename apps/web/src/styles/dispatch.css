@@ -95,6 +95,25 @@ dialog>.route-state { margin-bottom:16px; }dialog>.route-outcome { margin-top:0;
 }
 
 /* Source-aligned feasibility and decision support. */
+.view-dispatch .table-wrap{max-width:100%;overflow-x:auto;margin:18px 0;border:1px solid var(--line);border-radius:8px;background:var(--surface,#fff)}
+.view-dispatch table{width:100%;border-collapse:collapse;text-align:left;font-size:13px}
+.view-dispatch th,.view-dispatch td{padding:14px;vertical-align:top;border-bottom:1px solid var(--line);min-width:110px;overflow-wrap:anywhere}
+.view-dispatch th{color:var(--accent);background:var(--soft)}
+.view-dispatch .notice{min-width:0;overflow-wrap:anywhere}
+.view-dispatch .notice>div{min-width:0;max-width:100%}
+.view-dispatch .notice h3{font-size:16px;margin-bottom:12px}
+.view-dispatch .notice ol,.view-dispatch .notice ul{padding-left:20px}
+.view-dispatch details{margin:12px 0}
+.view-dispatch summary{cursor:pointer;font-weight:600}
+.view-dispatch #edit-orders{width:100%;min-height:90px}
+.view-dispatch label{max-width:100%}
+.view-dispatch #planning-vehicle{max-width:100%}
+@media(max-width:760px){
+  .planning-orders thead{display:none}
+  .planning-orders,.planning-orders tbody,.planning-orders tr,.planning-orders td{display:block;width:100%}
+  .view-dispatch .planning-orders td{border:0;padding:8px 14px}
+  .planning-orders tr{border-bottom:1px solid var(--line);padding:10px 0}
+}
 .constraint-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:16px 0 20px}
 .constraint-check{display:flex;align-items:flex-start;gap:8px;padding:10px;border:1px solid var(--line);border-radius:6px;background:#fafbf8;min-width:0}
 .constraint-check>span{color:var(--accent);display:grid;place-items:center}.constraint-check.fail>span{color:var(--red)}

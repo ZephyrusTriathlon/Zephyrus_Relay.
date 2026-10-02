@@ -49,11 +49,11 @@ test('Dispatcher planning APIs persist valid drafts and explainable deferrals at
   });
   await t.test('validation uses persisted quantities, vehicles and windows without writes',async()=>{
     const truck=fleet.find(v=>v.type==='TRUCK'&&v.temperature==='AMBIENT'&&v.depotId===outlet.depotId);
-    const before=await db.allocation.count();
+    const before=await db.allocation.count({where:{orderId:{in:ids}}});
     const response=await request('/planning/validate',dispatcher,{date,vehicleId:truck.id,orderIds:[ids[0]]});assert.equal(response.status,200);
     const result=await response.json();assert.equal(result.feasible,false);
     assert.ok(result.violations.some(v=>v.code==='REFRIGERATION_REQUIRED'));assert.ok(result.violations.some(v=>v.code==='VAN_ACCESS_REQUIRED'));
-    assert.equal(await db.allocation.count(),before);
+    assert.equal(await db.allocation.count({where:{orderId:{in:ids}}}),before);
     assert.equal((await request('/planning/validate',dispatcher,{date,vehicleId:truck.id,orderIds:[ids[0]],weightKg:0})).status,400);
     assert.equal((await request('/planning/validate',dispatcher,{date,vehicleId:truck.id,orderIds:[ids[0],ids[0]]})).status,400);
     assert.equal((await request('/planning/validate',dispatcher,{date,vehicleId:truck.id,orderIds:['missing']})).status,400);

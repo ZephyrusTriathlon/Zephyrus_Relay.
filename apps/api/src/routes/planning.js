@@ -20,7 +20,7 @@ async function context(db,date) {
   const week=weekBounds(date);
   const [vehicles,depots,trips]=await Promise.all([
     db.vehicle.findMany({orderBy:{id:'asc'}}),db.depot.findMany(),
-    db.trip.findMany({where:{deliveryDate:{gte:day(week.start),lt:day(week.end)}},include:{vehicle:true,stops:{orderBy:{position:'asc'},include:{allocations:{include:{order:{include:includeOrder}}}}}},orderBy:{id:'asc'}})
+    db.trip.findMany({where:{deliveryDate:{gte:day(week.start),lt:day(week.end)}},include:{vehicle:true,stops:{orderBy:{position:'asc'},include:{allocations:{include:{order:{include:includeOrder},loadingCheck:true,loadingIssues:true,exceptions:true,proof:{include:{receipt:true}}}}}}},orderBy:{id:'asc'}})
   ]);
   const data=await loadPlanningData(depots);
   const existingTrips=trips.map(trip=>{

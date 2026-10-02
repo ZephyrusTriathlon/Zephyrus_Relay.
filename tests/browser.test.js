@@ -22,9 +22,12 @@ test('Relay: connected order, planning constraints, field exceptions and respons
   await new Promise(resolve=>webHttp.once('listening',resolve));
   process.env.RELAY_URL=`http://127.0.0.1:${webHttp.address().port}`;
   const browser = await connect();
+  // Preserve historical simulation regression coverage, including page reloads.
+  // The production/default online flow is exercised in operations.test.js.
+  await browser.send('Page.addScriptToEvaluateOnNewDocument',{source:'window.relayHistoricalFieldTest=true;'});
   const { send, input, key, viewport, screenshot, waitFor } = browser;
   const login = async id => {
-    await browser.run(`(async()=>{await authRequest('logout',{});await authRequest('login',{identifier:${JSON.stringify(id)},password:'RelayDemo!26'});await refreshIdentity();serverPlanning=false;render();const reveal=role==='dispatch'&&pendingDispatchOrderId&&dispatchHandoff(pendingDispatchOrderId);if(reveal){render();finishDispatchHandoff();}})()`);
+    await browser.run(`(async()=>{fieldOnline=false;await authRequest('logout',{});await authRequest('login',{identifier:${JSON.stringify(id)},password:'RelayDemo!26'});await refreshIdentity();serverPlanning=false;render();const reveal=role==='dispatch'&&pendingDispatchOrderId&&dispatchHandoff(pendingDispatchOrderId);if(reveal){render();finishDispatchHandoff();}})()`);
   };
   const run = browser.run;
   const click = async selector => { await browser.click(selector); if(selector.includes('sign-out'))await waitFor("!!document.querySelector('#login-form')"); };

@@ -62,7 +62,32 @@ function storeStatusDetails(o) {
   const a = o.allocation;
   return `<p class="store-status-copy">${o.status === 'CONFIRMED' ? 'Confirmed for planning. Awaiting scheduling.' : esc(storeStatusLabel(o.status))}</p>
     ${a ? `<div class="store-arrival-details"><div class="detail-row"><span>Scheduled trip</span><b>${esc(a.trip.tripNumber)}</b></div><div class="detail-row"><span>Vehicle</span><b>${esc(a.trip.vehicleId)}</b></div><div class="detail-row"><span>Expected arrival</span><b>${a.tripStop.expectedAt ? esc(new Date(a.tripStop.expectedAt).toLocaleString('en-GB',{timeZone:'Asia/Colombo'})) + ' Colombo' : 'Pending'}</b></div></div>` : ''}
+    ${storeReceiptSummary(o)}
     ${o.deferrals.map(d => `<div class="notice"><span><b>${esc(d.reason)}</b> · ${esc(d.explanation)}<br>${esc(d.impact)}${d.nextEligibleDate ? `<br>Next eligible date: ${esc(d.nextEligibleDate.slice(0,10))}` : ''}${d.resolvedAt ? ' · Resolved' : ''}</span></div>`).join('')}`;
+}
+function storeReceiptSummary(o) {
+  const a=o.allocation,p=a?.proof;
+  const issues=[...(a?.loadingIssues||[]),...(a?.exceptions||[])].filter(i=>i.status==='OPEN');
+  return `${a?`<p>Trip status: ${esc(a.trip.status)}</p>`:''}${issues.map(i=>`<p class="notice">${esc(i.type.replaceAll('_',' '))}: ${esc(i.details)}</p>`).join('')}${p?`<p>${p.deliveredCartons} cartons delivered to ${esc(p.recipient)} · ${esc(fieldTime(p.deliveredAt))}</p><button class="btn" data-action="store-receipt" data-id="${esc(o.id)}">View receipt</button> ${p.receipt?badge('Received'):badge(issues.length?'Receipt issue':'Awaiting receipt')}`:''}`;
+}
+async function showStoreReceipt(id) {
+  const owner=currentAccount()?.id;
+  try {
+    const {order:o}=await storeRequest('/'+encodeURIComponent(id));if(owner!==currentAccount()?.id)return;
+    const a=o.allocation,p=a?.proof;if(!p)return;
+    const issues=a.exceptions.filter(i=>i.status==='OPEN');
+    openDialog(`<div class="eyebrow">${esc(o.orderNumber)}</div><h2>Delivery receipt</h2><p>${p.deliveredCartons} cartons · ${esc(p.recipient)}<br>${esc(fieldTime(p.deliveredAt))} Colombo<br>${p.verified?'Carton count verified':'Unverified'}</p>${issues.map(i=>`<p class="notice">${esc(i.type)} · ${esc(i.details)}</p>`).join('')}${p.receipt?`<p>Receipt confirmed · ${esc(fieldTime(p.receipt.confirmedAt))}</p>`:`<label class="form-label" for="receipt-note">Issue / resolution details</label><textarea class="input" id="receipt-note" maxlength="500"></textarea><label class="form-label" for="receipt-type">Issue type</label><select class="input" id="receipt-type"><option value="PARTIAL_DELIVERY">Quantity mismatch</option><option value="DAMAGED_GOODS">Damaged goods</option></select><div class="dialog-actions"><button class="btn" data-action="store-receipt-issue" data-id="${esc(o.id)}">Report an issue</button><button class="btn primary" data-action="${issues.length?'store-resolve-receipt':'store-confirm-receipt'}" data-id="${esc(o.id)}">${issues.length?'Resolve issue':'Confirm receipt'}</button></div>`}`);
+  }catch(e){toast(e.message);}
+}
+async function mutateStoreReceipt(action,button) {
+  button.disabled=true;const owner=currentAccount()?.id;
+  try {
+    const {order:o}=await storeRequest('/'+encodeURIComponent(button.dataset.id));if(owner!==currentAccount()?.id)return;
+    const a=o.allocation,operation=action==='store-confirm-receipt'?'receipt':action==='store-resolve-receipt'?'resolve-receipt':'receipt-issue';
+    const body=operation==='receipt'?{cartons:a.proof.deliveredCartons}:operation==='resolve-receipt'?{resolution:document.querySelector('#receipt-note').value}:{type:document.querySelector('#receipt-type').value,details:document.querySelector('#receipt-note').value};
+    await operationRequest(`/trips/${encodeURIComponent(a.tripId)}/allocations/${encodeURIComponent(a.id)}/${operation}`,body);
+    if(owner!==currentAccount()?.id)return;await loadStoreOrders();await showStoreReceipt(o.id);
+  }catch(e){fieldFormError(e.message);}finally{button.disabled=false;}
 }
 function storeOrders(orders) {
   return `<section class="store-orders"><h2>Every order, every handoff</h2>${orders.length ? orders.map(o => `<article class="store-tracking-card"><header><div><span class="store-meta">${esc(o.brand)} · ${esc(o.temperatureRequirement)}</span><h3>${esc(o.orderNumber)}</h3></div>${badge(storeStatusLabel(o.status))}</header><div class="store-tracking-facts"><span>${o.units} cartons · ${o.weightKg} kg · ${o.volumeM3} m³</span><span>Requested delivery: ${esc(o.deliveryDate)}</span></div>${storeStatusDetails(o)}<footer><span class="store-meta">${esc(new Date(o.createdAt).toLocaleString('en-GB',{timeZone:'Asia/Colombo'}))} Colombo</span><button class="btn" data-action="order-detail" data-id="${esc(o.id)}">Order details</button></footer></article>`).join('') : '<p>No orders on this page. Place your first replenishment.</p>'}
@@ -138,11 +163,13 @@ async function showStoreOrder(id) {
   try {
     const {order:o} = await storeRequest('/' + encodeURIComponent(id));
     if (generation !== storeGeneration || currentAccount()?.id !== owner) return;
-    openDialog(`<div class="eyebrow">${esc(o.orderNumber)}</div><h2>${esc(o.outletId)} · ${storeStatusLabel(o.status)}</h2><p>Requested delivery: ${esc(o.deliveryDate)} · ${esc(o.temperatureRequirement)}</p>${storeStatusDetails(o)}<div class="store-review-lines">${o.items.map(i => `<div class="store-review-line"><div><b>${esc(i.description)}</b><small>${esc(i.productCode)}</small></div><strong>${i.units} cartons</strong></div>`).join('')}</div><h3>Status history</h3>${o.history.map(h => `<p>${esc(storeStatusLabel(h.status))} · ${esc(new Date(h.occurredAt).toLocaleString('en-GB',{timeZone:'Asia/Colombo'}))} Colombo<br>${esc(h.note)}</p>`).join('')}<p class="helper">Receipt confirmation will be available in Stage 7.</p>${dialogFooter()}`);
+    openDialog(`<div class="eyebrow">${esc(o.orderNumber)}</div><h2>${esc(o.outletId)} · ${storeStatusLabel(o.status)}</h2><p>Requested delivery: ${esc(o.deliveryDate)} · ${esc(o.temperatureRequirement)}</p>${storeStatusDetails(o)}<div class="store-review-lines">${o.items.map(i => `<div class="store-review-line"><div><b>${esc(i.description)}</b><small>${esc(i.productCode)}</small></div><strong>${i.units} cartons</strong></div>`).join('')}</div><h3>Status history</h3>${o.history.map(h => `<p>${esc(storeStatusLabel(h.status))} · ${esc(new Date(h.occurredAt).toLocaleString('en-GB',{timeZone:'Asia/Colombo'}))} Colombo<br>${esc(h.note)}</p>`).join('')}${dialogFooter()}`);
   } catch (error) { toast(error.message); }
 }
 function handleStoreAction(action, button) {
   if (role !== 'store') return false;
+  if(action==='store-receipt'){showStoreReceipt(button.dataset.id);return true;}
+  if(['store-confirm-receipt','store-receipt-issue','store-resolve-receipt'].includes(action)){mutateStoreReceipt(action,button);return true;}
   if (action === 'store-refresh') { loadStoreOrders(); return true; }
   if (action === 'store-orders' || action === 'store-replenish') { tab = action === 'store-orders' ? 'orders' : 'replenishment'; render(); if (tab === 'orders') loadStoreOrders(); return true; }
   if (action === 'store-next' || action === 'store-prev') { storeOffset = Math.max(0,storeOffset+(action === 'store-next' ? 20 : -20)); loadStoreOrders(); return true; }

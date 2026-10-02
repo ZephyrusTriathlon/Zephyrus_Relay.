@@ -86,7 +86,7 @@ function planningTripCard(t,disabled) {
   const m=t.planningContext?.metrics,v=t.vehicle;
   return `<section class="notice"><div><h3>${esc(t.tripNumber)} | ${esc(t.vehicleId)} | sequence ${t.sequence} | ${esc(t.status)}</h3>
     ${m?`<p>${esc(m.weightKg)} / ${esc(v.weightCapacityKg)} kg | ${esc(m.volumeM3)} / ${esc(v.volumeCapacityM3)} m&sup3; | ${esc(m.fuelLitres)} L | departure ${esc(m.departureMinute)}, return ${esc(m.returnMinute)} minutes after midnight</p>`:'<p>Legacy draft: metrics will be recomputed on release.</p>'}
-    <ol>${t.stops.map(s=>`<li>${esc(s.outletId)} | ${esc(s.expectedAt)}<br>${s.allocations.map(a=>esc(a.order.orderNumber)).join(', ')}</li>`).join('')}</ol>
+    <ol>${t.stops.map(s=>`<li>${esc(s.outletId)} | ${esc(s.expectedAt)} | ${esc(s.status)}<br>${s.allocations.map(a=>`${esc(a.order.orderNumber)} · ${esc(a.loadingCheck?.status||'PENDING')}${a.proof?' · POD saved':''}${a.proof?.receipt?' · Received':''}${[...(a.loadingIssues||[]),...(a.exceptions||[])].map(i=>`<p>${esc(i.type)} · ${esc(i.status)} · ${esc(i.details)}${i.resolution?' · '+esc(i.resolution):''}</p>`).join('')}`).join('<br>')}</li>`).join('')}</ol>
     ${(t.planningContext?.decisions||[]).map(d=>`<details><summary>${esc(d.orderId)} | Allocation explanation</summary><p>${esc(d.explanation)}</p><ul>${(d.rejections||[]).map(r=>`<li>${esc(r.vehicleId)}<ul>${planningReasons(r.violations)}</ul></li>`).join('')}</ul></details>`).join('')}
     ${t.planningContext?.review?`<p>${esc(t.planningContext.review.explanation)} Original assisted decisions above are historical.</p>`:''}
     ${t.status==='DRAFT'?`<button class="btn" data-action="planning-review" data-trip="${esc(t.id)}" ${disabled}>Review / adjust draft</button>`:''}

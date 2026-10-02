@@ -8,7 +8,7 @@ const include = {
   outlet: true, items: { orderBy: { lineNumber: 'asc' } },
   history: { orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }] },
   deferrals: { orderBy: { deferredAt: 'desc' } },
-  allocation: { select: { allocatedAt: true, trip: { select: { tripNumber: true, deliveryDate: true, status: true, vehicleId: true, plannedDepartureAt: true } }, tripStop: { select: { expectedAt: true, status: true } } } }
+  allocation: { select: { id:true, tripId:true, allocatedAt: true, loadingIssues:true, exceptions:true, proof:{include:{receipt:true}}, trip: { select: { tripNumber: true, deliveryDate: true, status: true, vehicleId: true, plannedDepartureAt: true } }, tripStop: { select: { expectedAt: true, status: true } } } }
 };
 function serialize(order) {
   const items = order.items.map(({ cartons, unitWeightKg, unitVolumeM3, ...item }) => ({ ...item, units: cartons, unitWeightKg: Number(unitWeightKg), unitVolumeM3: Number(unitVolumeM3) }));

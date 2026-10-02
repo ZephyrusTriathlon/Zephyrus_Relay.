@@ -2,11 +2,23 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 /** Small dependency-free Chrome DevTools client for the local prototype. */
-async function connect() {
+async function connect({isolated=false}={}) {
   const endpoint = process.env.RELAY_CDP_URL || 'http://127.0.0.1:9222';
-  const response = await fetch(`${endpoint}/json/new?about:blank`, { method: 'PUT' });
-  if (!response.ok) throw Error('Start a separate Chrome browser with --remote-debugging-port=9222.');
-  const target = await response.json();
+  let target,contextId,control,controlSend;
+  if(isolated){
+    const info=await (await fetch(`${endpoint}/json/version`)).json();
+    control=new WebSocket(info.webSocketDebuggerUrl);
+    await new Promise((resolve,reject)=>{control.addEventListener('open',resolve,{once:true});control.addEventListener('error',reject,{once:true});});
+    let id=0;
+    controlSend=(method,params={})=>new Promise((resolve,reject)=>{const serial=++id;const timer=setTimeout(()=>reject(Error(method+' timed out')),15000);const handler=event=>{const data=JSON.parse(event.data);if(data.id!==serial)return;clearTimeout(timer);control.removeEventListener('message',handler);data.error?reject(Error(data.error.message)):resolve(data.result);};control.addEventListener('message',handler);control.send(JSON.stringify({id:serial,method,params}));});
+    contextId=(await controlSend('Target.createBrowserContext')).browserContextId;
+    const {targetId}=await controlSend('Target.createTarget',{url:'about:blank',browserContextId:contextId});
+    target=(await (await fetch(`${endpoint}/json/list`)).json()).find(t=>t.id===targetId);
+  }else{
+    const response = await fetch(`${endpoint}/json/new?about:blank`, { method: 'PUT' });
+    if (!response.ok) throw Error('Start a separate Chrome browser with --remote-debugging-port=9222.');
+    target = await response.json();
+  }
   const socket = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise((resolve, reject) => {
     socket.addEventListener('open', resolve, { once: true });
@@ -98,7 +110,8 @@ async function connect() {
   };
   const close = async () => {
     socket.close();
-    await fetch(`${endpoint}/json/close/${target.id}`);
+    if(contextId){await controlSend('Target.disposeBrowserContext',{browserContextId:contextId});control.close();}
+    else await fetch(`${endpoint}/json/close/${target.id}`);
   };
   await send('Runtime.enable');
   await send('Page.enable');

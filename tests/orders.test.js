@@ -25,7 +25,7 @@ test('PostgreSQL order creation, scope, audit history and API restart persistenc
   const {createApp} = await import('../apps/api/src/app.js');
   const {createDatabase} = await import('../apps/api/src/db.js');
   let db = createDatabase(), now = new Date('2025-01-03T15:59:00+05:30'), demoClock;
-  const instances = [], ids = [], cookies = [];
+  const instances = [], ids = [], foreignIds = [], cookies = [];
   const calendarFixtures = [];
   let instance;
   async function start() {
@@ -40,9 +40,10 @@ test('PostgreSQL order creation, scope, audit history and API restart persistenc
     // Only remove records created by this test; no demo or user history is replaced.
     if (instance.server.listening) for (const cookie of cookies) await request('/auth/logout',cookie,{});
     for (const {app,server} of instances) { if(server.listening) await new Promise(resolve=>server.close(resolve)); await app.locals.sessionStore.close(); }
-    await db.orderStatusEvent.deleteMany({where:{orderId:{in:ids}}});
-    await db.orderItem.deleteMany({where:{orderId:{in:ids}}});
-    await db.order.deleteMany({where:{id:{in:ids}}});
+    const cleanupIds=[...ids,...foreignIds];
+    await db.orderStatusEvent.deleteMany({where:{orderId:{in:cleanupIds}}});
+    await db.orderItem.deleteMany({where:{orderId:{in:cleanupIds}}});
+    await db.order.deleteMany({where:{id:{in:cleanupIds}}});
     await db.calendarDay.deleteMany({where:{date:{in:calendarFixtures}}});
     await db.$disconnect();
   });
@@ -153,7 +154,8 @@ test('PostgreSQL order creation, scope, audit history and API restart persistenc
     const persisted=await db.order.findUnique({where:{id:ambient.id},include:{items:true}});assert.equal(persisted.outletId,user.outletId);assert.equal(persisted.items[0].cartons,3);
   });
   await t.test('other outlet IDs cannot access orders or change ownership',async()=>{
-    const other=await db.order.findFirst({where:{outletId:{not:user.outletId}}});assert.ok(other);
+    const otherOutlet=await db.outlet.findFirstOrThrow({where:{id:{not:user.outletId}}});
+    const other=await db.order.create({data:{orderNumber:`TEST-${require('node:crypto').randomUUID()}`,outletId:otherOutlet.id,deliveryDate:new Date('2025-01-04T00:00:00Z'),temperatureRequirement:'AMBIENT',windowOpenTime:otherOutlet.windowOpenTime,windowCloseTime:otherOutlet.windowCloseTime}});foreignIds.push(other.id);
     assert.equal((await request('/orders',cookie,{...payload,outletId:other.outletId})).status,403);
     assert.equal((await request('/orders?outletId='+other.outletId,cookie)).status,403);
     for(const suffix of ['', '/history']) assert.equal((await request('/orders/'+other.id+suffix,cookie)).status,404);
@@ -175,6 +177,7 @@ test('PostgreSQL order creation, scope, audit history and API restart persistenc
   await t.test('orders and session survive closing the API and database client and starting fresh',async()=>{
     await new Promise(resolve=>instance.server.close(resolve));await db.$disconnect();db=createDatabase();await start();
     const r=await request('/orders/'+chilled.id,cookie);assert.equal(r.status,200);const {order}=await r.json();assert.deepEqual(order,chilled);
-    const listing=await (await request('/orders?limit=100',cookie)).json();assert.ok(ids.every(id=>listing.orders.some(o=>o.id===id)));
+    for(const id of ids){const persisted=await request('/orders/'+id,cookie);assert.equal(persisted.status,200);assert.equal((await persisted.json()).order.id,id);}
+    for(const id of foreignIds)assert.equal((await request('/orders/'+id,cookie)).status,404);
   });
 });

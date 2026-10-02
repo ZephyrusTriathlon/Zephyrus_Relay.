@@ -17,14 +17,15 @@ const rawSeed=()=>({orders:[
 ],confirmed:false,ready:false,started:false,offline:false,pending:[],lastSync:'15:42',history:[],vehicle:'VEH003'});
 const hydrateOrder=o=>{o.weight=o.items.reduce((n,q,i)=>n+q*products[i].weight,0);o.volume=Number(o.items.reduce((n,q,i)=>n+q*products[i].volume,0).toFixed(2));o.cartons=o.items.reduce((n,q)=>n+q,0);if(o.items.some((q,i)=>q&&products[i].temp==='chilled'))o.tempRequirement='chilled';return o};
 const seed=()=>{const data=rawSeed();data.orders.forEach(hydrateOrder);return data};
+// Historical developer simulation only; online workspaces never consume these orders.
 let state;try{state=JSON.parse(localStorage.getItem('relay-v1'))||seed()}catch{state=seed()}
 state.orders?.forEach(o=>{if(o.outletId==='OUT004'||o.outletId==='OUT006')o.dockType='street'});
 let role=['dispatch','store','loader','delivery'].includes(location.hash.slice(1))?location.hash.slice(1):'dispatch',tab='replenishment',queueFilter='all',queueQuery='',productQuery='',quantities=products.map(()=>0),toastTimer;
 const roles={store:{name:'Store operations',short:'Store',icon:'store',user:'Nimasha Perera',initials:'NP',title:'Store manager · OUT006'},dispatch:{name:'Dispatch planning',short:'Dispatch',icon:'route',user:'Dinuka Fernando',initials:'DF',title:'Dispatcher · Peliyagoda'},loader:{name:'Warehouse loading',short:'Loading',icon:'box',user:'Kasun Silva',initials:'KS',title:'Loader · Bay 03'},delivery:{name:'Delivery route',short:'Delivery',icon:'truck',user:'Amal Perera',initials:'AP',title:'Driver · VEH003'}};
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const assigned=()=>state.orders.filter(o=>o.route==='R-07');
+const assigned=()=>['loader','delivery'].includes(role)&&usesOnlineField()?fieldOrders:state.orders.filter(o=>o.route==='R-07');
 const totalWeight=()=>assigned().reduce((n,o)=>n+o.weight,0);
-const save=()=>localStorage.setItem('relay-v1',JSON.stringify(state));
+const save=()=>{if(window.relayDevTools&&!(['loader','delivery'].includes(role)&&usesOnlineField()))localStorage.setItem('relay-v1',JSON.stringify(state));};
 function record(message){state.history.unshift({message,time:new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})});if(state.offline)state.pending.push(message);else state.lastSync=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});save()}
 function toast(message){const t=document.querySelector('#toast');t.textContent=message;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),3800)}
 function heading(eyebrow,title,subtitle,actions=''){return `<div class="page-heading"><div><div class="eyebrow">${eyebrow}</div><h1>${title}</h1><p class="subtitle">${subtitle}</p></div><div class="row">${actions}</div></div>`}

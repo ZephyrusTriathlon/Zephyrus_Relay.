@@ -34,11 +34,12 @@ async function refreshIdentity() {
     closeDialog();
   }
   identityReady = true;
-  if(!wasReady || previous !== JSON.stringify(authenticatedUser) || previousNotice !== sessionNotice) { resetStoreData(); resetPlanningData(); closeDialog(); render(); }
+  if(!wasReady || previous !== JSON.stringify(authenticatedUser) || previousNotice !== sessionNotice) { resetStoreData(); resetPlanningData(); resetFieldData(); closeDialog(); render(); }
   else if(authenticatedUser?.workspace === 'store') loadStoreOrders();
+  else if(['loader','delivery'].includes(authenticatedUser?.workspace)) loadFieldTrips();
 }
 async function signOut() {
-  try { await authRequest('logout', {}); sessionNotice=''; authenticatedUser=null; resetStoreData(); resetPlanningData(); closeDialog(); render(); document.querySelector('#login-id').focus(); }
+  try { await authRequest('logout', {}); sessionNotice=''; authenticatedUser=null; resetStoreData(); resetPlanningData(); resetFieldData(); closeDialog(); render(); document.querySelector('#login-id').focus(); }
   catch { toast('Sign out failed. Please retry.'); }
 }
 window.addEventListener('focus', () => { if (identityReady) refreshIdentity(); });

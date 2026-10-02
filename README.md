@@ -21,7 +21,7 @@ For database setup, configure root `.env` from `.env.example`, then run `npm run
 
 ## Authentication and seeded accounts
 
-Stage 5 adds a central planning validator, deterministic assisted allocation, persisted draft trips and explainable deferrals through Dispatcher-only APIs. See the [Stage 05 planning walkthrough](docs/walkthroughs/stage-05-planning-engine.md) for setup, route/fuel assumptions, the seeded example and API requests. The existing Dispatcher browser screens remain a prototype; plan release is Stage 6.
+Stage 5 adds a central planning validator, deterministic assisted allocation, persisted draft trips and explainable deferrals through Dispatcher-only APIs. In Dispatch, **Open saved planning data** loads a business date, validates selected candidates through the server and allocates the day as drafts. See the [Stage 05 planning walkthrough](docs/walkthroughs/stage-05-planning-engine.md) for setup, route/fuel assumptions, the seeded example and API requests. R-07 remains a labelled historical simulation; plan release is Stage 6.
 
 Run migrations and seed before signing in. All four development accounts use **`RelayDemo!26`**; the seed stores independently salted bcrypt hashes in PostgreSQL. These credentials live in server seed code and documentation only.
 

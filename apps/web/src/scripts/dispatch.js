@@ -1,4 +1,69 @@
-// Planning is a local decision-support simulation using the showcased Colombo values.
+// R-07 is a local decision-support simulation using the showcased Colombo values.
+// Server planning below consumes the central Stage 5 engine. The R-07 demo is separate.
+let serverPlanning = false;
+let planningDate = '', planningDay = null, planningResult = null, planningError = '';
+let planningBusy = false, planningGeneration = 0;
+let planningOrderIds = [], planningVehicleId = '', planningDeparture = '240', planningRetry = false;
+function resetPlanningData() {
+  planningGeneration++; serverPlanning=false; planningDate=''; planningDay=null; planningResult=null;
+  planningError=''; planningBusy=false; planningOrderIds=[]; planningVehicleId=''; planningDeparture='240'; planningRetry=false;
+}
+async function planningRequest(path, body) {
+  const response=await fetch('/api/planning'+path,{credentials:'same-origin',cache:'no-store',
+    ...(body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})});
+  const data=await response.json();
+  if(!response.ok){if(response.status===401)await refreshIdentity();throw new Error(`${data.error?.code || 'PLANNING_UNAVAILABLE'}: ${data.error?.message || 'Planning unavailable'}`);}
+  return data;
+}
+async function runServerPlanning(action) {
+  if(planningBusy||currentAccount()?.workspace!=='dispatch')return;
+  const owner=currentAccount().id,generation=planningGeneration,date=planningDate;
+  const current=()=>generation===planningGeneration&&currentAccount()?.id===owner;
+  planningBusy=true;planningError='';planningResult=null;render();
+  try {
+    if(action==='planning-validate'){
+      const result=await planningRequest('/validate',{date,vehicleId:planningVehicleId,orderIds:planningOrderIds,departureMinute:Number(planningDeparture)});
+      if(current())planningResult={kind:'validation',...result};
+    }else{
+      if(action==='planning-allocate'){
+        const result=await planningRequest('/allocate',{date,retryDeferred:planningRetry});
+        if(!current())return;
+        planningResult={kind:'allocation',...result};planningDay=null;planningOrderIds=[];
+      }
+      const snapshot=await planningRequest('/day/'+encodeURIComponent(date));
+      if(!current())return;
+      planningDay=snapshot;
+      if(!snapshot.vehicles.some(v=>v.id===planningVehicleId))planningVehicleId=snapshot.vehicles[0]?.id || '';
+      planningOrderIds=planningOrderIds.filter(id=>snapshot.orders.some(o=>o.id===id&&!o.allocation&&['CONFIRMED','DEFERRED'].includes(o.status)));
+    }
+  }catch(error){if(current())planningError=error.message;}
+  finally{if(current()){planningBusy=false;render();}}
+}
+function planningReasons(violations) {
+  return violations.map(v=>`<li>${esc(v.code)}: ${esc(v.message)}${v.orderId?` (${esc(v.orderId)})`:''}</li>`).join('');
+}
+function serverPlanningView() {
+  const disabled=planningBusy?'disabled':'';
+  const result=planningResult;
+  return `${heading('Stage 5 · saved planning data','Draft planning','Validate candidates and allocate the saved order queue. All feasibility decisions come from the server.', '<button class="btn" data-action="planning-prototype">Open R-07 simulation</button>')}
+    <section class="notice"><div><label for="planning-date">Business date (Colombo)</label> <input class="input" id="planning-date" type="date" value="${esc(planningDate)}" ${disabled}>
+    <button class="btn" data-action="planning-load" ${disabled}>Load day</button><p>Use an operating date in the shared calendar. For the seeded historical example, enter 2025-01-02.</p></div></section>
+    ${planningBusy?'<p role="status">Planning request in progress…</p>':''}
+    ${planningError?`<div class="notice" role="alert">${esc(planningError)}</div>`:''}
+    ${result?.kind==='validation'?`<section class="notice" id="planning-result" role="status"><div><b>${result.feasible?'Candidate is feasible':'Candidate is infeasible'}</b><ul>${planningReasons(result.violations)}</ul>${result.metrics?`<p>Estimated return: ${esc(result.metrics.returnMinute)} minutes after midnight · ${esc(result.metrics.fuelLitres)} L reserved</p>`:''}</div></section>`:''}
+    ${result?.kind==='allocation'?`<section class="notice" id="planning-result" role="status"><div><b>${result.trips.length} draft trips saved · ${result.deferrals.length} orders deferred</b>
+    ${result.decisions.map(d=>`<p>${esc(d.orderId)} → ${esc(d.vehicleId)} / ${esc(d.tripId)}: ${esc(d.explanation)}</p>`).join('')}
+    ${result.deferrals.map(d=>`<p>${esc(d.orderId)}: ${esc(d.explanation)}</p>`).join('')}</div></section>`:''}
+    ${planningDay?`<section aria-label="Saved planning day"><h2>${esc(planningDay.date)} · ${planningDay.orders.length} orders</h2><p>Routing policy: ${esc(planningDay.policy.version)}. ${esc(planningDay.policy.time)}</p>
+    <div class="table-wrap"><table><thead><tr><th>Validate</th><th>Order / outlet</th><th>Status</th><th>Allocation / deferrals</th></tr></thead><tbody>${planningDay.orders.map(o=>`<tr><td>${!o.allocation&&['CONFIRMED','DEFERRED'].includes(o.status)?`<input type="checkbox" data-planning-order="${esc(o.id)}" aria-label="Validate ${esc(o.orderNumber)}" ${planningOrderIds.includes(o.id)?'checked':''} ${disabled}>`:''}</td><td>${esc(o.orderNumber)}<br>${esc(o.outlet.id)} · ${esc(o.outlet.brand)}</td><td>${esc(o.status)}</td><td>${o.allocation?esc(o.allocation.tripId):'Unallocated'}${o.deferrals.map(d=>`<p>${esc(d.reason)}: ${esc(d.explanation)}<br>${esc(d.impact)}${d.resolvedAt?' · Resolved':''}</p>`).join('')}</td></tr>`).join('')}</tbody></table></div>
+    <label for="planning-vehicle">Candidate vehicle</label> <select class="input" id="planning-vehicle" ${disabled}>${planningDay.vehicles.map(v=>`<option value="${esc(v.id)}" ${v.id===planningVehicleId?'selected':''}>${esc(v.id)} · ${esc(v.type)} · ${esc(v.temperature)}</option>`).join('')}</select>
+    <label for="planning-departure">Departure minute after midnight (Colombo)</label> <input class="input" id="planning-departure" type="number" value="${esc(planningDeparture)}" ${disabled}>
+    <button class="btn" data-action="planning-validate" ${disabled}>Validate selected candidate</button>
+    <p>Validation does not save a trip. Assisted allocation considers the entire eligible queue, with priority and vehicle selection decided by the server.</p>
+    <label><input type="checkbox" id="planning-retry" ${planningRetry?'checked':''} ${disabled}> Retry deferred orders on this date</label>
+    <button class="btn primary" data-action="planning-allocate" ${disabled}>Allocate day as drafts</button>
+    <h2>Saved trips</h2>${planningDay.trips.length?planningDay.trips.map(t=>`<p>${esc(t.tripNumber)} · ${esc(t.vehicleId)} · sequence ${t.sequence} · ${esc(t.status)}</p>`).join(''):'<p>No trips for this date.</p>'}</section>`:''}`;
+}
 const vehicles = [
   {id:'VEH003',plate:'Synthetic fleet record',model:'Reefer truck',type:'truck',temp:'reefer',capacity:5510,volumeCap:26.4,kmPerL:4.7,fuelQuota:480,fuelUsed:312,driver:'Amal Perera',bay:'03',available:'03:30',depot:'Peliyagoda'},
   {id:'VEH008',plate:'Synthetic fleet record',model:'Ambient truck',type:'truck',temp:'ambient',capacity:3800,volumeCap:22,kmPerL:7.1,fuelQuota:460,fuelUsed:295,driver:'Nuwan Jayasinghe',bay:'05',available:'03:30',depot:'Peliyagoda'},
@@ -105,11 +170,13 @@ function dispatchPrimaryAction(route) {
 }
 
 function dispatchView() {
+  if(serverPlanning)return serverPlanningView();
   const pending = state.orders.filter(o => !o.route), v = activeVehicle(), weight = totalWeight();
   const carriedWeight=assigned().filter(o=>o.status!=='Delivered').reduce((sum,o)=>sum+o.weight,0);
   const route=dispatchRouteState(), attention=route.issues.length+route.receiptIssues.length+(route.completed?0:1);
   const deferred=state.orders.filter(o=>o.decision==='deferred');
   return `${heading('Monday, 25 May · planning Tuesday, 26 May · Peliyagoda','Next-day dispatch','Operating day · Festival ramp 0.6 · Monsoon. Orders closed at 16:00. Allocate the confirmed queue and explain every deferral.',`<button class="btn" data-action="capacity-outlook">${icon('grid')} Capacity outlook</button><button class="btn" data-action="manifest">${icon('list')} Manifest</button>${dispatchPrimaryAction(route)}`)}
+    <div class="notice"><div><b>R-07 historical simulation</b><p>These browser records and checks are a demo. Same-brand, same-district and 270-minute restrictions are Task 2B-style demo rules, not Stage 5 feasibility constraints. Use saved planning data for server validation and draft allocation.</p><button class="btn" data-action="planning-server">Open saved planning data</button></div></div>
     ${offlineBanner()}
     <section class="dispatch-pulse" aria-label="Dispatch overview">
       <div><span>${state.confirmed?'Waiting for next run':'Awaiting decision'}</span><strong>${String(pending.length).padStart(2,'0')} <small>${deferred.length} deferred · ${pending.reduce((sum,o) => sum+o.cartons,0)} cartons</small></strong></div>
@@ -157,6 +224,9 @@ function vehicleContext() {
 }
 
 function handleDispatchAction(action,button,o) {
+  if(action==='planning-server'){serverPlanning=true;render();return true;}
+  if(action==='planning-prototype'){serverPlanning=false;render();return true;}
+  if(['planning-load','planning-validate','planning-allocate'].includes(action)){runServerPlanning(action);return true;}
   const v=activeVehicle();
   switch(action) {
     case 'planning-panel': dispatchPanel=button.dataset.panel; render(); if(innerWidth<=1100)document.querySelector(`#plan-tab-${dispatchPanel}`)?.focus({preventScroll:true});else document.querySelector(dispatchPanel==='queue'?'#queue-search':'#planning-route')?.focus({preventScroll:true});return true;
@@ -198,6 +268,12 @@ function handleDispatchAction(action,button,o) {
 }
 
 function bindDispatchInputs() {
+  const clearResult=()=>{planningResult=null;document.querySelector('#planning-result')?.remove();};
+  document.querySelector('#planning-date')?.addEventListener('change',event=>{planningGeneration++;planningDate=event.target.value;planningDay=null;planningResult=null;planningError='';planningOrderIds=[];render();});
+  document.querySelector('#planning-vehicle')?.addEventListener('change',event=>{planningVehicleId=event.target.value;clearResult();});
+  document.querySelector('#planning-departure')?.addEventListener('input',event=>{planningDeparture=event.target.value;clearResult();});
+  document.querySelector('#planning-retry')?.addEventListener('change',event=>{planningRetry=event.target.checked;});
+  document.querySelectorAll('[data-planning-order]').forEach(input=>input.addEventListener('change',event=>{const id=event.target.dataset.planningOrder;planningOrderIds=event.target.checked?[...planningOrderIds,id]:planningOrderIds.filter(value=>value!==id);clearResult();}));
   document.querySelector('.planning-tabs')?.addEventListener('keydown',event=>{
     if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
     event.preventDefault();const tabs=['queue','route','vehicle'];let index=tabs.indexOf(dispatchPanel);

@@ -4,6 +4,7 @@ const { connect } = require('./cdp');
 
 test('Relay: connected order, planning constraints, field exceptions and responsive views', { timeout: 240000 }, async t => {
   const createdOrderIds = [];
+  const planningTripIds = [];
   // Serve the real UI/API with a fixed clock inside the supplied calendar range.
   if (require('node:fs').existsSync('.env')) process.loadEnvFile('.env');
   const {createApp}=await import('../apps/api/src/app.js');
@@ -39,6 +40,12 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     await run("authRequest('logout',{})").catch(()=>{});
     await browser.close();
     if (createdOrderIds.length) {
+      const allocations=await db.allocation.findMany({where:{orderId:{in:createdOrderIds}}});
+      planningTripIds.push(...allocations.map(a=>a.tripId));
+      await db.deferral.deleteMany({where:{orderId:{in:createdOrderIds}}});
+      await db.allocation.deleteMany({where:{orderId:{in:createdOrderIds}}});
+      await db.tripStop.deleteMany({where:{tripId:{in:planningTripIds}}});
+      await db.trip.deleteMany({where:{id:{in:planningTripIds}}});
       await db.orderStatusEvent.deleteMany({where:{orderId:{in:createdOrderIds}}});
       await db.orderItem.deleteMany({where:{orderId:{in:createdOrderIds}}});
       await db.order.deleteMany({where:{id:{in:createdOrderIds}}});
@@ -586,6 +593,50 @@ test('Relay: connected order, planning constraints, field exceptions and respons
       await login('dispatcher');
       await run(`state=JSON.parse(${JSON.stringify(savedState)});save();role='dispatch';render()`);
     }
+  });
+
+  await t.test('Dispatcher consumes central planning APIs, displays failures and saves mixed-brand drafts with deferrals',async()=>{
+    await login('dispatcher');await viewport(1440,1000);
+    const date='2024-02-08',deliveryDate=new Date(date+'T00:00:00Z');
+    assert.equal(await db.order.count({where:{deliveryDate}}),0,'Use a dedicated database with the browser fixture date free');
+    const fresh=await db.outlet.findFirst({where:{brand:'FRESH',parkingConstraint:'VAN_ONLY',district:'Colombo'},orderBy:{id:'asc'}});
+    const style=await db.outlet.findFirst({where:{brand:'STYLE',district:fresh.district,depotId:fresh.depotId,dockType:'STREET'},orderBy:{id:'asc'}});
+    const orders=[];
+    for(const [outlet,temperature,weight] of [[fresh,'CHILLED',13],[style,'AMBIENT',13],[fresh,'AMBIENT',8000]]){
+      const order=await db.order.create({data:{orderNumber:`BROWSER-PLANNING-${require('node:crypto').randomUUID()}`,deliveryDate,outletId:outlet.id,temperatureRequirement:temperature,windowOpenTime:outlet.windowOpenTime,windowCloseTime:outlet.windowCloseTime,items:{create:{lineNumber:1,productCode:'UI-PLANNING',description:'Server planning browser regression',cartons:1,unitWeightKg:weight,unitVolumeM3:0.032,temperatureRequirement:temperature}}}});
+      createdOrderIds.push(order.id);orders.push(order);
+    }
+    const prototype=await run('JSON.stringify(state)');
+    assert.match(await mainText(),/R-07 historical simulation/);
+    await click('[data-action="planning-server"]');
+    await input('#planning-date',date,'change');await click('[data-action="planning-load"]');
+    await waitFor('!!planningDay && !planningBusy');assert.equal(await run('planningDay.orders.length'),3);
+    await viewport(360,844);assert.ok(await run('document.documentElement.scrollWidth<=innerWidth'),'Saved planning panel fits a phone viewport');await viewport(1440,1000);
+    await click(`[data-planning-order="${orders[0].id}"]`);
+    const truck=await db.vehicle.findFirst({where:{depotId:fresh.depotId,type:'TRUCK',temperature:'AMBIENT'}});
+    await input('#planning-vehicle',truck.id,'change');await click('[data-action="planning-validate"]');
+    await waitFor('planningResult?.kind==="validation" && !planningBusy');
+    assert.match(await mainText(),/REFRIGERATION_REQUIRED/);assert.match(await mainText(),/VAN_ACCESS_REQUIRED/);
+    const van=await db.vehicle.findFirst({where:{depotId:fresh.depotId,type:'VAN',temperature:'REEFER'},orderBy:{id:'asc'}});
+    await input('#planning-vehicle',van.id,'change');assert.equal(await run("document.querySelector('#planning-result')"),null,'Editing the candidate clears stale validation');await click(`[data-planning-order="${orders[1].id}"]`);
+    await click('[data-action="planning-validate"]');await waitFor('planningResult?.kind==="validation" && !planningBusy');
+    assert.equal(await run('planningResult.feasible'),true,'The UI allows server-approved mixed-brand candidates');
+    assert.ok(await run('planningResult.metrics.returnMinute-planningResult.metrics.departureMinute>270'));
+    await click('[data-action="planning-allocate"]');await waitFor('planningResult?.kind==="allocation" && !planningBusy');
+    assert.equal(await run('planningResult.trips.length'),1);assert.equal(await run('planningResult.deferrals.length'),1);
+    planningTripIds.push(...await run('planningResult.trips.map(t=>t.id)'));
+    assert.match(await mainText(),/CAPACITY_WEIGHT/);assert.match(await mainText(),/DRAFT/);
+    const allocations=await db.allocation.findMany({where:{orderId:{in:orders.map(o=>o.id)}},include:{trip:true}});
+    assert.equal(allocations.length,2);assert.equal(new Set(allocations.map(a=>a.tripId)).size,1);assert.ok(allocations.every(a=>a.trip.status==='DRAFT'));
+    await click('[data-action="planning-allocate"]');await waitFor('planningResult?.kind==="allocation" && !planningBusy');
+    assert.equal(await run('planningResult.trips.length'),0);assert.equal(await run('planningResult.deferrals.length'),0);
+    await click('#planning-retry');await click('[data-action="planning-allocate"]');await waitFor('planningResult?.kind==="allocation" && !planningBusy');
+    assert.equal(await run('planningResult.deferrals[0].attempts'),2);
+    await input('#planning-date','2030-01-01','change');await click('[data-action="planning-load"]');await waitFor('!!planningError && !planningBusy');
+    assert.match(await mainText(),/INVALID_PLANNING_DATE/);
+    assert.equal(await run('JSON.stringify(state)'),prototype,'Saved planning actions do not mutate the R-07 simulation');
+    await login('store');assert.equal(await run('planningDay'),null);assert.equal(await run('planningResult'),null);
+    await login('dispatcher');assert.equal(await run('serverPlanning'),false);
   });
 
   await t.test('sign out preserves completed work', async () => {

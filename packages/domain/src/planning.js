@@ -109,8 +109,13 @@ export function allocateOrders({date,orders,vehicles,existingTrips=[],travel,ser
     for(const vehicle of fleet) {
       const baselines=()=>[...existingTrips,...trips.map(t=>({id:t.id,vehicleId:t.vehicle.id,date,sequence:t.sequence,...t.validation.metrics}))];
       const own=trips.filter(t=>t.vehicle.id===vehicle.id);
-      const used=baselines().filter(t=>t.vehicleId===vehicle.id&&t.date===date&&t.status!=='CANCELLED');
-      const sequence=[1,2].find(n=>!used.some(t=>t.sequence===n)) ?? 3;
+      const persisted=baselines().filter(t=>t.vehicleId===vehicle.id&&t.date===date);
+      const used=persisted.filter(t=>t.status!=='CANCELLED');
+      // The database reserves sequence numbers across every status. Cancellation
+      // frees active trip/fuel/time reservations, never a persisted identity.
+      const sequences=new Set(persisted.map(t=>t.sequence));
+      let sequence=1;
+      while(sequences.has(sequence))sequence++;
       const next={id:`plan-${vehicle.id}-${sequence}`,vehicle,sequence,orders:[],departureMinute:Math.max(PLANNING_POLICY.departureMinute,...used.map(t=>t.returnMinute ?? PLANNING_POLICY.departureMinute))};
       for(const target of [...own,next]) {
         const input={date,vehicle,orders:[...target.orders,order],departureMinute:target.departureMinute,existingTrips:baselines(),travel,service,id:target.id};

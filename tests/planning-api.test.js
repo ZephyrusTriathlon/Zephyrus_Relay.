@@ -7,7 +7,7 @@ test('Dispatcher planning APIs persist valid drafts and explainable deferrals at
   const {createApp}=await import('../apps/api/src/app.js');
   const {createDatabase}=await import('../apps/api/src/db.js');
   const db=createDatabase();
-  const date='2024-02-06',deliveryDate=new Date(date+'T00:00:00Z'),ids=[],tripIds=[],cookies=[];
+  const date='2024-02-06',deliveryDate=new Date(date+'T00:00:00Z'),ids=[],tripIds=[],cookies=[],vehicleIds=[];
   assert.equal((await db.calendarDay.findUnique({where:{date:deliveryDate}}))?.isOperating,true);
   // Refuse to touch a date containing user work; cleanup only our recorded IDs.
   assert.equal(await db.order.count({where:{deliveryDate}}),0,'Use a dedicated development database with this fixture date free');
@@ -30,6 +30,7 @@ test('Dispatcher planning APIs persist valid drafts and explainable deferrals at
     await db.deferral.deleteMany({where:{orderId:{in:ids}}});
     await db.allocation.deleteMany({where:{orderId:{in:ids}}});
     await db.tripStop.deleteMany({where:{tripId:{in:tripIds}}});await db.trip.deleteMany({where:{id:{in:tripIds}}});
+    await db.vehicle.deleteMany({where:{id:{in:vehicleIds}}});
     await db.orderStatusEvent.deleteMany({where:{orderId:{in:ids}}});await db.orderItem.deleteMany({where:{orderId:{in:ids}}});await db.order.deleteMany({where:{id:{in:ids}}});await db.$disconnect();
   });
   async function login(name){const r=await request('/auth/login',null,{identifier:name,password:'RelayDemo!26'});assert.equal(r.status,200);const cookie=r.headers.get('set-cookie').split(';')[0];cookies.push(cookie);return cookie;}
@@ -80,5 +81,52 @@ test('Dispatcher planning APIs persist valid drafts and explainable deferrals at
     const history=await db.deferral.findMany({where:{orderId:ids[1]}});assert.equal(history.length,2);assert.ok(history.every(d=>d.deferredAt&&d.deferredById&&d.planningContext.rejections.length));
     const view=await request(`/planning/day/${date}`,dispatcher);assert.equal(view.status,200);const json=await view.json();assert.equal(json.orders.length,2);assert.equal(json.trips.length,1);assert.ok(json.reservations.length);assert.equal(json.orders.find(o=>o.id===ids[1]).deferrals.length,2);
     assert.equal((await request('/planning/release',dispatcher,{date})).status,404);
+  });
+  await t.test('cancelled persisted trips reserve sequences but not active daily slots, including concurrent replacements',async()=>{
+    // Only this fixture vehicle can carry these orders; the supplied fleet tops out at 7200 kg.
+    const vehicle=await db.vehicle.create({data:{id:`stage5-${randomUUID()}`,type:'VAN',temperature:'REEFER',weightCapacityKg:9000,volumeCapacityM3:100,fuelType:'DIESEL',kmPerLitre:100,weeklyFuelQuotaL:1000,depotId:outlet.depotId,source:'DEMO'}});
+    vehicleIds.push(vehicle.id);
+    const addOrder=async(requestedDate=deliveryDate)=>{
+      const order=await db.order.create({data:{orderNumber:`STAGE5-CANCEL-${randomUUID()}`,deliveryDate:requestedDate,outletId:outlet.id,temperatureRequirement:'CHILLED',windowOpenTime:outlet.windowOpenTime,windowCloseTime:outlet.windowCloseTime,items:{create:{lineNumber:1,productCode:'cancel-regression',description:'Cancellation persistence regression',cartons:1,unitWeightKg:8000,unitVolumeM3:1,temperatureRequirement:'CHILLED'}}}});
+      ids.push(order.id);return order;
+    };
+    await addOrder();
+    const initial=await request('/planning/allocate',dispatcher,{date});assert.equal(initial.status,200);
+    const first=(await initial.json()).trips[0];tripIds.push(first.id);
+    assert.equal(first.vehicleId,vehicle.id);assert.equal(first.sequence,1);
+    await db.trip.update({where:{id:first.id},data:{status:'CANCELLED'}});
+    const replacement=await addOrder();
+    const candidate=await request('/planning/validate',dispatcher,{date,vehicleId:vehicle.id,orderIds:[replacement.id]});
+    assert.equal(candidate.status,200);assert.equal((await candidate.json()).feasible,true);
+    await addOrder();
+    const responses=await Promise.all([request('/planning/allocate',dispatcher,{date}),request('/planning/allocate',dispatcher,{date})]);
+    for(const response of responses)assert.equal(response.status,200,JSON.stringify(await response.clone().json()));
+    const plans=await Promise.all(responses.map(r=>r.json()));
+    const replacements=plans.flatMap(p=>p.trips);tripIds.push(...replacements.map(t=>t.id));
+    assert.equal(replacements.length,2);assert.deepEqual(replacements.map(t=>t.sequence).sort(),[2,3]);
+    assert.ok(replacements.every(t=>t.status==='DRAFT'&&t.validation.feasible));
+    assert.equal(await db.trip.count({where:{vehicleId:vehicle.id,deliveryDate,status:{not:'CANCELLED'}}}),2);
+    const extra=await addOrder();
+    const full=await request('/planning/allocate',dispatcher,{date});assert.equal(full.status,200);
+    const deferred=(await full.json()).deferrals.find(d=>d.orderId===extra.id);
+    assert.ok(deferred.rejections.filter(r=>r.vehicleId===vehicle.id).every(r=>r.violations.some(v=>v.code==='DAILY_TRIP_LIMIT'||v.code==='CAPACITY_WEIGHT')));
+    // Two cancelled records plus one active record still leave exactly one active slot.
+    await db.trip.update({where:{id:replacements.find(t=>t.sequence===2).id},data:{status:'CANCELLED'}});
+    const retry=await request('/planning/allocate',dispatcher,{date,retryDeferred:true});assert.equal(retry.status,200);
+    const last=(await retry.json()).trips.find(t=>t.vehicleId===vehicle.id);tripIds.push(last.id);assert.equal(last.sequence,4);
+    assert.equal(await db.allocation.count({where:{tripId:{in:[...replacements.map(t=>t.id),last.id]}}}),3);
+    assert.ok((await db.deferral.findMany({where:{orderId:extra.id}})).every(d=>d.resolvedAt));
+    const view=await(await request(`/planning/day/${date}`,dispatcher)).json();
+    assert.equal(view.trips.filter(t=>t.vehicleId===vehicle.id&&t.status==='CANCELLED').length,2);
+    // Across different dates, the shared lock must also protect weekly fuel.
+    const dates=['2024-02-09','2024-02-10'];
+    for(const value of dates){const when=new Date(value+'T00:00:00Z');assert.equal(await db.order.count({where:{deliveryDate:when}}),0);await addOrder(when);}
+    await db.vehicle.update({where:{id:vehicle.id},data:{weeklyFuelQuotaL:0.75}});
+    const competing=await Promise.all(dates.map(date=>request('/planning/allocate',dispatcher,{date})));
+    for(const response of competing)assert.equal(response.status,200,JSON.stringify(await response.clone().json()));
+    const weekly=await Promise.all(competing.map(r=>r.json()));
+    tripIds.push(...weekly.flatMap(p=>p.trips.map(t=>t.id)));
+    assert.equal(weekly.flatMap(p=>p.trips).length,1);assert.equal(weekly.flatMap(p=>p.deferrals).length,1);
+    assert.ok(weekly.flatMap(p=>p.deferrals)[0].rejections.filter(r=>r.vehicleId===vehicle.id).every(r=>r.violations.some(v=>v.code==='WEEKLY_FUEL_QUOTA')));
   });
 });

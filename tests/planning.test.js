@@ -124,3 +124,16 @@ test('varied deterministic demand never yields an invalid final trip',async()=>{
     for(const trip of result.trips)assert.equal(validateTrip({...input,vehicle:trip.vehicle,orders:trip.orders,departureMinute:trip.departureMinute,existingTrips:result.trips.filter(t=>t!==trip).map(t=>({vehicleId:t.vehicle.id,date:input.date,...t.validation.metrics}))}).feasible,true);
   }
 });
+
+test('persisted sequence identity is independent of the two active trip limit',async()=>{
+  const {allocateOrders}=await import('../packages/domain/src/planning.js');
+  const input=base(),orders=[input.orders[0],{...structuredClone(input.orders[0]),id:'O2'}];
+  const run=existingTrips=>allocateOrders({...input,orders,vehicles:[input.vehicle],existingTrips});
+  assert.deepEqual(run([]).trips.map(t=>t.sequence),[1,2]);
+  const cancelled=sequence=>({id:'C'+sequence,vehicleId:input.vehicle.id,date:input.date,sequence,status:'CANCELLED'});
+  assert.deepEqual(run([cancelled(1),cancelled(2)]).trips.map(t=>t.sequence),[3,4]);
+  const active={id:'active',vehicleId:input.vehicle.id,date:input.date,sequence:2,status:'DRAFT',departureMinute:0,returnMinute:200,fuelLitres:1};
+  const mixed=run([cancelled(1),active]);assert.deepEqual(mixed.trips.map(t=>t.sequence),[3]);assert.equal(mixed.deferrals.length,1);
+  // Use an available positive number, rather than MAX+1 (which can exhaust Int).
+  assert.deepEqual(run([cancelled(2147483647)]).trips.map(t=>t.sequence),[1,2]);
+});

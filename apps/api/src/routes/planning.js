@@ -20,7 +20,7 @@ async function context(db,date) {
   const week=weekBounds(date);
   const [vehicles,depots,trips]=await Promise.all([
     db.vehicle.findMany({orderBy:{id:'asc'}}),db.depot.findMany(),
-    db.trip.findMany({where:{deliveryDate:{gte:day(week.start),lt:day(week.end)},status:{not:'CANCELLED'}},include:{vehicle:true,stops:{orderBy:{position:'asc'},include:{allocations:{include:{order:{include:includeOrder}}}}}},orderBy:{id:'asc'}})
+    db.trip.findMany({where:{deliveryDate:{gte:day(week.start),lt:day(week.end)}},include:{vehicle:true,stops:{orderBy:{position:'asc'},include:{allocations:{include:{order:{include:includeOrder}}}}}},orderBy:{id:'asc'}})
   ]);
   const data=await loadPlanningData(depots);
   const existingTrips=trips.map(trip=>{
@@ -28,7 +28,7 @@ async function context(db,date) {
     // Existing Stage 2 draft has no snapshot: derive its reservation from persisted
     // orders/departure and the same shared model, never from browser prototype fuel.
     let result=trip.planningContext?.metrics;
-    if(!result&&trip.plannedDepartureAt&&orders.length){
+    if(trip.status!=='CANCELLED'&&!result&&trip.plannedDepartureAt&&orders.length){
       const derived=validateTrip({date:key(trip.deliveryDate),vehicle:trip.vehicle,orders,departureMinute:businessMinute(trip.plannedDepartureAt),...data});
       if(!derived.violations.some(v=>['INVALID_PLANNING_INPUT','ROUTE_DATA_MISSING'].includes(v.code)))result=derived.metrics;
     }

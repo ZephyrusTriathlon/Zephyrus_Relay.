@@ -1,6 +1,6 @@
 # Stage 05: explainable planning and assisted allocation
 
-Stage 5 adds a deterministic domain engine and Dispatcher-only planning APIs. Allocations are persisted as **DRAFT** trips with stops and arrival estimates; orders become **PLANNED**. There is no release endpoint or Stage 6 loading workflow. The existing browser Dispatcher/field screens are still a separately labelled historical prototype, not clients of these planning APIs. No Stage 5 rules were implemented in browser scripts.
+Stage 5 adds a deterministic domain engine and Dispatcher-only planning APIs. Allocations are persisted as **DRAFT** trips with stops and arrival estimates; orders become **PLANNED**. There is no release endpoint or Stage 6 loading workflow. Dispatch's **Open saved planning data** panel consumes the day, validate and allocate APIs, displays backend violations and persisted deferrals, and saves only drafts. Candidate validation checks the selected orders; assisted allocation processes the entire eligible day queue. The existing R-07/field journey remains a labelled historical simulation with separate local records. Its Task 2B-style grouping/time rules do not apply to saved planning data. No hard planning rules are implemented in the saved-planning browser panel.
 
 ## Setup
 
@@ -77,6 +77,8 @@ Authenticate as `dispatcher` / `RelayDemo!26` using the existing session login. 
 Allocation normally processes only unallocated CONFIRMED orders. `retryDeferred:true` explicitly retries DEFERRED orders on their original requested date. It does not silently move the delivery date. The next eligible date recorded on a deferral comes from a later operating CalendarDay and is advice for reconciliation, not an automatic reschedule. At most 200 pending orders are accepted per run; larger batches fail before writes.
 
 One PostgreSQL transaction persists all trips, stops, allocations, order transitions and deferrals. A shared advisory lock serializes planning writers across all dates, so competing dispatchers cannot overspend weekly fuel or daily trip slots. Default repeat runs do not duplicate allocations or deferrals. Explicit deferred retries append attempts; eventual allocation resolves outstanding deferrals. The existing database trigger records order-status changes. No new loading checks, driver assignments or release transitions are created.
+
+Cancelled trips retain their persisted sequence identity and remain visible in the day snapshot. Sequence selection uses the lowest unused positive integer across all statuses; the existing unique index is unchanged. Only non-cancelled trips reserve daily active slots, timing and weekly fuel. Thus a day can contain cancelled sequence 1 plus active sequences 2 and 3 while respecting the two-active-trip limit. Cancellation workflows and reallocation of an already allocated order remain outside Stage 5.
 
 Deferrals store order, existing reason enum, human explanation, impact, actor, timestamp, next eligible date and structured context containing exact codes, candidate rejections, policy, planning date, priority signals and attempt count. Empty fleets produce `NO_VEHICLES` in the explanation/context. Database/reference-data failures return sanitized `PLANNING_UNAVAILABLE`; transaction/uniqueness conflicts return `PLANNING_CONFLICT`.
 

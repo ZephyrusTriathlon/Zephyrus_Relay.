@@ -1,5 +1,6 @@
 import { installAuth } from './auth.js';
 import { orderRoutes } from './routes/orders.js';
+import { planningRoutes } from './routes/planning.js';
 import express from 'express';
 import helmet from 'helmet';
 import { fileURLToPath } from 'node:url';
@@ -11,9 +12,9 @@ export function createApp({ webRoot = defaultWebRoot, devReads = false, database
   app.disable('x-powered-by');
   // Keep the Stage 1–3 response contract; all order errors use one structured envelope,
   // including JSON parsing, origin, session, and unexpected database failures.
-  app.use('/api/orders', (_req, res, next) => {
+  app.use(['/api/orders', '/api/planning'], (_req, res, next) => {
     const json = res.json.bind(res);
-    res.json = body => json(typeof body?.error === 'string' ? { error: { code: ({400:'INVALID_JSON',403:'FORBIDDEN',404:'NOT_FOUND',413:'PAYLOAD_TOO_LARGE',503:'SERVICE_UNAVAILABLE'})[res.statusCode] || 'INTERNAL_ERROR', message: body.error } } : body);
+    res.json = body => json(typeof body?.error === 'string' ? { error: { code: ({400:'INVALID_JSON',401:'UNAUTHENTICATED',403:'FORBIDDEN',404:'NOT_FOUND',413:'PAYLOAD_TOO_LARGE',503:'SERVICE_UNAVAILABLE'})[res.statusCode] || 'INTERNAL_ERROR', message: body.error } } : body);
     next();
   });
   app.use(helmet({ contentSecurityPolicy: { directives: { 'upgrade-insecure-requests': null } } }));
@@ -22,6 +23,7 @@ export function createApp({ webRoot = defaultWebRoot, devReads = false, database
   app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'zephyrus-relay-api' }));
   app.locals.sessionStore = installAuth(app, { database, ...authOptions });
   app.use('/api/orders', orderRoutes({ database, orderClock }));
+  app.use('/api/planning', planningRoutes({ database }));
   app.use('/api', developmentReads({ enabled: devReads, database }));
   app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
   app.use((req, res, next) => {

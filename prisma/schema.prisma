@@ -271,6 +271,7 @@ model Trip {
   status       TripStatus @default(DRAFT)
   source       RecordSource @default(APPLICATION)
   plannedDepartureAt DateTime? @db.Timestamptz(6)
+  planningContext Json?
   startedAt    DateTime? @db.Timestamptz(6)
   completedAt  DateTime? @db.Timestamptz(6)
   createdAt    DateTime @default(now()) @db.Timestamptz(6)
@@ -325,6 +326,7 @@ model Deferral {
   reason     DeferralReason
   explanation String
   impact     String
+  planningContext Json?
   deferredById String?
   deferredBy User? @relation(fields: [deferredById], references: [id], onDelete: Restrict)
   deferredAt DateTime @default(now()) @db.Timestamptz(6)

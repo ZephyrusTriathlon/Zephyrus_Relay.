@@ -21,6 +21,8 @@ For database setup, configure root `.env` from `.env.example`, then run `npm run
 
 ## Authentication and seeded accounts
 
+Stage 5 adds a central planning validator, deterministic assisted allocation, persisted draft trips and explainable deferrals through Dispatcher-only APIs. See the [Stage 05 planning walkthrough](docs/walkthroughs/stage-05-planning-engine.md) for setup, route/fuel assumptions, the seeded example and API requests. The existing Dispatcher browser screens remain a prototype; plan release is Stage 6.
+
 Run migrations and seed before signing in. All four development accounts use **`RelayDemo!26`**; the seed stores independently salted bcrypt hashes in PostgreSQL. These credentials live in server seed code and documentation only.
 
 | Email / employee ID | Role |
@@ -64,7 +66,7 @@ Dialogs have accessible names, keyboard focus containment and focus restoration.
 
 ## Prototype boundaries
 
-Store Manager orders and their status/history are backed by PostgreSQL. Stock cover, catalogue availability, suggestions, prototype dispatcher/field routes, contacts, forecast values and synchronization remain simulated. The prototype uses official field names and representative records, but it does not load the confidential CSV files into the browser. Prototype dispatcher and field data persists in this browser’s `relay-v1` localStorage entry; Store orders use the API exclusively. Stage 2 added PostgreSQL/Prisma and private network ingestion. Stage 3 added authentication; Stage 4 connects Store ordering and status tracking to that backend. Allocation and real offline synchronization remain later work. There is no offline mutation synchronization, Service Worker or IndexedDB sync; Store orders can be read from another authenticated session through the API. Offline mode demonstrates the experience rather than providing real offline infrastructure.
+Store Manager orders and their status/history are backed by PostgreSQL. Stock cover, catalogue availability, suggestions, prototype dispatcher/field routes, contacts, forecast values and synchronization remain simulated. The prototype uses official field names and representative records, but it does not load the confidential CSV files into the browser. Prototype dispatcher and field data persists in this browser’s `relay-v1` localStorage entry; Store orders use the API exclusively. Stage 2 added PostgreSQL/Prisma and private network ingestion. Stage 3 added authentication; Stage 4 connects Store ordering and status tracking to that backend. Stage 5 adds server-side assisted allocation and persisted draft plans; release and real offline synchronization remain later work. There is no offline mutation synchronization, Service Worker or IndexedDB sync; Store orders can be read from another authenticated session through the API. Offline mode demonstrates the experience rather than providing real offline infrastructure.
 
 One **R-07** Fresh trip is editable and can be released during each demo. **R-12 Style** and **R-15 Tech** are scope previews. Fleet selection uses three representative available vehicles from the supplied Peliyagoda fleet. Suggestions, forecast values, time budgets and schematic maps illustrate decisions; they do not claim optimization or Datathon predictions. New orders placed after release remain queued until a demo reset. Navigation opens an external map search. Partial deliveries remain outstanding for reconciliation; they do not generate a completed receipt.
 

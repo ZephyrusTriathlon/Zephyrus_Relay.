@@ -24,7 +24,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
   const browser = await connect();
   const { send, input, key, viewport, screenshot, waitFor } = browser;
   const login = async id => {
-    await browser.run(`(async()=>{await authRequest('logout',{});await authRequest('login',{identifier:${JSON.stringify(id)},password:'RelayDemo!26'});await refreshIdentity();const reveal=role==='dispatch'&&pendingDispatchOrderId&&dispatchHandoff(pendingDispatchOrderId);if(reveal){render();finishDispatchHandoff();}})()`);
+    await browser.run(`(async()=>{await authRequest('logout',{});await authRequest('login',{identifier:${JSON.stringify(id)},password:'RelayDemo!26'});await refreshIdentity();serverPlanning=false;render();const reveal=role==='dispatch'&&pendingDispatchOrderId&&dispatchHandoff(pendingDispatchOrderId);if(reveal){render();finishDispatchHandoff();}})()`);
   };
   const run = browser.run;
   const click = async selector => { await browser.click(selector); if(selector.includes('sign-out'))await waitFor("!!document.querySelector('#login-form')"); };
@@ -75,6 +75,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     await waitFor(`currentAccount()?.workspace===${JSON.stringify(workspace)}`);
     assert.equal(await run('currentAccount().workspace'),workspace);
     if (workspace === 'store') await waitFor('!!storeData && !storeLoading');
+    if (workspace === 'dispatch') await run('serverPlanning=false;render();finishDispatchHandoff()');
   };
 
   await t.test('server login, fixed roles, session isolation and responsive account access', async () => {
@@ -608,7 +609,13 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     }
     const prototype=await run('JSON.stringify(state)');
     assert.match(await mainText(),/R-07 historical simulation/);
-    await click('[data-action="planning-server"]');
+    await run('resetPlanningData();render()');
+    assert.equal(await run('serverPlanning'),true);
+    assert.match(await mainText(),/Dispatch planning/);
+    await run('window.relayDevTools=false;serverPlanning=false;render()');
+    assert.equal(await run("document.querySelector('[data-action=planning-prototype]')"),null);
+    assert.match(await mainText(),/Dispatch planning/);
+    await run('window.relayDevTools=true;serverPlanning=true;render()');
     await input('#planning-date',date,'change');await click('[data-action="planning-load"]');
     await waitFor('!!planningDay && !planningBusy');assert.equal(await run('planningDay.orders.length'),3);
     await viewport(360,844);assert.ok(await run('document.documentElement.scrollWidth<=innerWidth'),'Saved planning panel fits a phone viewport');await viewport(1440,1000);
@@ -632,6 +639,17 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     assert.equal(await run('planningResult.trips.length'),0);assert.equal(await run('planningResult.deferrals.length'),0);
     await click('#planning-retry');await click('[data-action="planning-allocate"]');await waitFor('planningResult?.kind==="allocation" && !planningBusy');
     assert.equal(await run('planningResult.deferrals[0].attempts'),2);
+    const draft=await run('planningDay.trips.find(t=>t.status==="DRAFT")');
+    await click(`[data-action="planning-review"][data-trip="${draft.id}"]`);
+    assert.equal(await run("document.querySelector('[data-action=planning-release]').disabled"),true);
+    await input('#edit-vehicle',truck.id,'change');await click('[data-action="planning-edit"]');
+    await waitFor('planningResult?.accepted===false && !planningBusy');
+    await input('#edit-vehicle',draft.vehicleId,'change');await click('[data-action="planning-edit"]');
+    await waitFor('planningResult?.accepted===true && !planningBusy');
+    await click('[data-action="planning-release"]');await waitFor('planningResult?.kind==="release" && !planningBusy');
+    assert.equal(await run('planningDay.trips[0].status'),'RELEASED');
+    await screenshot('stage06-released-plan');
+    await viewport(360,844);assert.ok(await run('document.documentElement.scrollWidth<=innerWidth'));await screenshot('stage06-dispatch-360');await viewport(1440,1000);
     await input('#planning-date','2030-01-01','change');await click('[data-action="planning-load"]');await waitFor('!!planningError && !planningBusy');
     assert.match(await mainText(),/INVALID_PLANNING_DATE/);
     assert.equal(await run('JSON.stringify(state)'),prototype,'Saved planning actions do not mutate the R-07 simulation');

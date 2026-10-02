@@ -42,7 +42,7 @@ test('Dispatcher planning APIs persist valid drafts and explainable deferrals at
   }
   await t.test('authentication, all other roles, origin and input protections',async()=>{
     assert.equal((await(await request(`/planning/day/${date}`,null)).json()).error.code,'UNAUTHENTICATED');
-    for(const cookie of [null,await login('store'),await login('loader'),await login('driver')])for(const [path,body] of [[`/planning/day/${date}`,undefined],['/planning/allocate',{date}],['/planning/validate',{date,vehicleId:fleet[0].id,orderIds:[ids[0]]}]])assert.equal((await request(path,cookie,body)).status,cookie?403:401);
+    for(const cookie of [null,await login('store'),await login('loader'),await login('driver')])for(const [path,body] of [[`/planning/day/${date}`,undefined],['/planning/allocate',{date}],['/planning/release',{date}],['/planning/edit',{date}],['/planning/validate',{date,vehicleId:fleet[0].id,orderIds:[ids[0]]}]])assert.equal((await request(path,cookie,body)).status,cookie?403:401);
     const cross=await fetch(base+'/planning/allocate',{method:'POST',headers:{cookie:dispatcher,'Content-Type':'application/json',origin:'https://invalid.example'},body:JSON.stringify({date})});assert.equal(cross.status,403);
     for(const body of [{date:'bad'},{date,vehicleId:'forged'},{date,orderClock:'forged'}])assert.equal((await request('/planning/allocate',dispatcher,body)).status,400);
     for(const bad of ['2024-02-04','2030-01-01']){const r=await request('/planning/allocate',dispatcher,{date:bad});assert.equal(r.status,400);assert.equal((await r.json()).error.code,'INVALID_PLANNING_DATE');}
@@ -80,7 +80,32 @@ test('Dispatcher planning APIs persist valid drafts and explainable deferrals at
     const retry=await request('/planning/allocate',dispatcher,{date,retryDeferred:true});assert.equal(retry.status,200);assert.equal((await retry.json()).deferrals[0].attempts,2);
     const history=await db.deferral.findMany({where:{orderId:ids[1]}});assert.equal(history.length,2);assert.ok(history.every(d=>d.deferredAt&&d.deferredById&&d.planningContext.rejections.length));
     const view=await request(`/planning/day/${date}`,dispatcher);assert.equal(view.status,200);const json=await view.json();assert.equal(json.orders.length,2);assert.equal(json.trips.length,1);assert.ok(json.reservations.length);assert.equal(json.orders.find(o=>o.id===ids[1]).deferrals.length,2);
-    assert.equal((await request('/planning/release',dispatcher,{date})).status,404);
+
+  });
+  await t.test('manual changes are validated, stale edits rejected, release revalidates and finalizes real manifests',async()=>{
+    const getTrip=()=>db.trip.findFirst({where:{deliveryDate,status:'DRAFT'},include:{stops:{include:{allocations:true}}}});
+    let trip=await getTrip();
+    const original=JSON.stringify(trip);
+    const body={date,tripId:trip.id,version:trip.updatedAt.toISOString(),vehicleId:trip.vehicleId,departureMinute:240,orderIds:[ids[0]]};
+    const truck=fleet.find(v=>v.type==='TRUCK'&&v.depotId===outlet.depotId);
+    const invalid=await request('/planning/edit',dispatcher,{...body,vehicleId:truck.id});assert.equal(invalid.status,200);assert.equal((await invalid.json()).accepted,false);
+    assert.equal(JSON.stringify(await getTrip()),original);
+    const valid=await request('/planning/edit',dispatcher,{...body,departureMinute:241});assert.equal(valid.status,200);assert.equal((await valid.json()).accepted,true);
+    assert.equal((await request('/planning/edit',dispatcher,body)).status,409);
+    trip=await getTrip();assert.equal(trip.planningContext.metrics.departureMinute,241);
+    const item=await db.orderItem.findFirst({where:{orderId:ids[0]}});
+    await db.orderItem.update({where:{id:item.id},data:{cartons:1000000}});
+    try{
+      const blocked=await request('/planning/release',dispatcher,{date});assert.equal(blocked.status,409);assert.ok((await blocked.json()).violations.some(v=>v.code==='CAPACITY_WEIGHT'));
+      assert.equal((await getTrip()).status,'DRAFT');
+    }finally{await db.orderItem.update({where:{id:item.id},data:{cartons:item.cartons}});}
+    const released=await request('/planning/release',dispatcher,{date});assert.equal(released.status,200);assert.equal((await released.json()).trips.length,1);
+    const saved=await db.trip.findUnique({where:{id:trip.id},include:{stops:{include:{allocations:true}}}});
+    assert.equal(saved.status,'RELEASED');assert.ok(saved.planningContext.release.actorId);assert.ok(saved.planningContext.release.at);
+    assert.equal(saved.stops[0].allocations[0].orderId,ids[0]);assert.equal(saved.stops[0].position,1);assert.equal(saved.stops[0].outletId,outlet.id);
+    assert.equal(saved.stops[0].expectedAt.toISOString(),new Date(new Date(date+'T00:00:00+05:30').getTime()+saved.planningContext.metrics.stops[0].arrivalMinute*60000).toISOString());
+    assert.equal((await request('/planning/edit',dispatcher,{...body,version:saved.updatedAt.toISOString()})).status,409);
+    assert.equal((await(await request('/planning/release',dispatcher,{date})).json()).trips.length,0);
   });
   await t.test('cancelled persisted trips reserve sequences but not active daily slots, including concurrent replacements',async()=>{
     // Only this fixture vehicle can carry these orders; the supplied fleet tops out at 7200 kg.

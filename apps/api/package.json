@@ -13,6 +13,7 @@
     "@relay/domain": "1.0.0",
     "bcrypt": "^6.0.0",
     "connect-pg-simple": "^10.0.0",
+    "csv-parse": "^7.0.3",
     "express": "^5.1.0",
     "express-session": "^1.19.0",
     "helmet": "^8.1.0",

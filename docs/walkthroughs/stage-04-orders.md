@@ -15,6 +15,20 @@ Seeding requires `RELAY_ALLOW_SEED=true`; do not seed a production database. The
 
 Open http://127.0.0.1:4173 and sign in as **store** / **RelayDemo!26**. Identity and the assigned outlet come from PostgreSQL. The supplied seed assigns the Fresh Store Manager to **OUT004**; the screen uses the actual assignment, not the prototype's hardcoded OUT006. Account → Sign out remains the way to change employees.
 
+## Explicit judge ordering clock
+
+The authoritative file `data/General Data/calendar.csv` contains **910 rows**, from **2024-01-01 through 2026-06-28**, including **770 operating dates** from **2024-01-01 through 2026-06-27**. PostgreSQL was checked before this correction: its 910 dates and operating flags match the source exactly. This is a source coverage limitation, not a truncated import. No dates have been added.
+
+For a fresh seeded local judge walkthrough, explicitly set this in root `.env` before starting the API:
+
+```dotenv
+RELAY_DEMO_ORDER_NOW=2025-01-03T15:59:00+05:30
+```
+
+The API reuses the existing server-side `orderClock` dependency and logs that ordering time is fixed. Startup requires the configured Asia/Colombo business date to exist as a SUPPLIED CalendarDay; invalid/unlisted values fail startup. Production rejects this configuration. The instant stays fixed until configuration is changed and the API restarted; it does not advance with elapsed time. No HTTP clock setter exists, and browser/client timestamps cannot override it. This changes only the ordering clock, not authentication/session expiration or Dispatcher/Loader/Driver prototype clocks.
+
+The shared clock controls today's date, the exact 16:00 cutoff, and the earliest delivery-date search through PostgreSQL. This example suggests the supplied operating Saturday **2025-01-04**. To demonstrate cutoff, restart with **2025-01-03T16:00:00+05:30**: tomorrow is closed and the default advances past non-operating Sunday to **2025-01-06**. A retained January 4 draft is rejected with quantities preserved. Unset `RELAY_DEMO_ORDER_NOW` and restart to restore real server time. Seeding alone never enables a fake clock. Real-time ordering after source coverage still requires an authoritative dataset extension.
+
 ## Place and reload an order
 
 1. In Replenishment, choose **AMBIENT**, a future operating delivery date, and carton quantities. Review order → Place order.
@@ -60,11 +74,11 @@ The server samples its clock after validating the payload, looking up the assign
 
 Same-day and past delivery dates return HTTP 400 `INVALID_DELIVERY_DATE`. A later future date remains available after cutoff only when its persisted `CalendarDay.isOperating` flag is true; the server never silently moves a rejected next-day order or inserts it as a normal next-day order. The UI initially suggests the earliest currently open operating date from the shared calendar and keeps any explicitly chosen draft date, allowing the server to reject a draft left open across cutoff. The date is the **requested delivery date**; eventual scheduling belongs to Allocation/Trip/TripStop, and deferrals retain their own next-eligible date.
 
-To demonstrate rejection after 16:00, leave a tomorrow-dated draft open before cutoff and submit it afterward. Alternatively, send tomorrow's date directly with the API below. The review dialog displays the server error and preserves quantities. `node --test tests/orders.test.js` exercises 15:59, exactly 16:00 and after 16:00 deterministically, without changing the workstation clock. The injected clock exists only in the server factory used by tests; no HTTP clock override is exposed.
+To demonstrate rejection after 16:00, leave a tomorrow-dated draft open before cutoff and submit it afterward. Alternatively, send tomorrow's date directly with the API below. The review dialog displays the server error and preserves quantities. `node --test tests/orders.test.js` exercises 15:59, exactly 16:00 and after 16:00 deterministically, without changing the workstation clock. Tests and the explicit judge startup configuration reuse the same server-factory clock dependency; no HTTP clock override is exposed.
 
 Dates marked non-operating in the imported `calendar.csv` / PostgreSQL `CalendarDay` data return HTTP 400 `INVALID_DELIVERY_DATE`, including weekday closures. Unlisted dates are also rejected because operating status cannot be verified. These checks run before any order, item or history write; existing past-date and cutoff errors retain precedence. Client flags cannot override the calendar.
 
-If no eligible operating date is loaded, `/context` returns `earliestDeliveryDate: null`; the UI leaves a new draft date blank and explains that calendar coverage is unavailable. Explicit draft dates and quantities are preserved on refresh/rejection. The supplied calendar currently covers **2024-01-01 through 2026-06-28**: demonstrations outside this range need an authoritative calendar extension, not a weekday fallback. Tests use fixed clocks within coverage, without changing the workstation clock or exposing a clock override over HTTP.
+If no eligible operating date is loaded, `/context` returns `earliestDeliveryDate: null`; the UI leaves a new draft date blank and explains that calendar coverage is unavailable. Explicit draft dates and quantities are preserved on refresh/rejection. The supplied calendar currently covers **2024-01-01 through 2026-06-28**: real-time ordering outside this range needs an authoritative calendar extension. The explicit judge configuration above and deterministic tests reuse the server clock dependency within coverage, without changing the workstation clock or exposing a clock override over HTTP.
 
 ## API contract and scope
 
@@ -78,7 +92,7 @@ All endpoints require a signed-in Store Manager with an outlet assignment:
 | `GET /api/orders/:id` | `{order}` with items, history, allocation and deferrals |
 | `GET /api/orders/:id/history` | `{orderId,status,history,deferrals,allocation}` |
 
-Example body (replace the historical sample date with a currently open operating date):
+Example body (works with the explicit judge clock above; otherwise select a currently open authoritative operating date):
 
 ```json
 {
@@ -126,7 +140,28 @@ Screenshots generated by the browser suite are local ignored artifacts: `artifac
 
 No commits or pushes are part of this stage.
 
-### Recorded results
+### Calendar coverage follow-up verification
+
+- Case B: source and PostgreSQL both contain 910 matching dates/operating flags, 2024-01-01 through 2026-06-28. No import correction, generated calendar data, migration or database reset was needed.
+- `npm run db:validate` and `npm run build` passed.
+- `node --test tests/orders.test.js`: **13 passed**, no failures/skips. Added coverage for configured-date validation, production rejection, Colombo midnight/cutoff, authoritative operating defaults, rejected client clock inputs/HTTP setters, and real server time when unconfigured. The first development run caught an incorrect module import path; it was corrected before the passing runs.
+- `npm run test:db`: **5 passed**, no failures/skips, including source preservation and repeatable seed.
+- `npm test`: **47 passed, 2 failed, 2 skipped**. The delivery-proof prototype check could not find visible `[data-action="resolved"]` at `tests/browser.test.js:411`; its parent suite also failed and two dependent workflow checks skipped. Store Manager browser checks passed. No field workflow changes were made in this correction.
+- The order runs emitted a `pg` concurrent-query deprecation warning. `git diff --check` passed (Git also reported LF-to-CRLF conversion warnings).
+
+### Investigation of the reported delivery browser failure (2026-10-02)
+
+The previously reported failing subtest was `delivery defers exceptions and validates proof; receipt fixture supports later-stage prototype checks`, at `tests/browser.test.js:411`, with `Visible element missing: [data-action="resolved"]`. It was **not reproduced in this investigation**. Classification remains **inconclusive**, not proven unrelated or a demonstrated clock regression. No speculative product or test-harness fix was retained.
+
+- Smallest existing runnable scenario: `node --test tests/browser.test.js` (**17 passed**, no failures/skips). Its delivery subtest depends on earlier login, dispatch and loading stages; filtering those away would not reproduce the original scenario.
+- Environment audit: `RELAY_DEMO_ORDER_NOW` was absent from the inherited shell/Node environment and after loading root `.env`. Root/API/web environment-file inspection found no active assignment; Vite's development/test/production environment resolution also returned no assignment. `.env.example` only contains a commented opt-in example. The browser harness creates Vite and the API in the test process, with no spawned `server.js` process. It explicitly injects its existing `orderClock: () => orderNow`; it never calls `configuredOrderClock`.
+- Wiring audit: only `server.js` consumes the new configuration. The injected clock reaches Store ordering context and order admission through `app.js`/`routes/orders.js`. Seed selection remains `prisma/demo.js`'s fixed `DEMO_DATE`; auth/session handling, delivery fixture timestamps, route visibility and prototype state do not read that clock. Delivery proof uses local `state`, not an orders API response.
+- Flow trace: the test selects a deferred order, clicks `retry-stop`, and expects `fieldResolution` to open a dialog containing `resolved`. Temporary CDP diagnostics showed all three retry buttons opening that dialog. The historical failure establishes that the control was not visible when queried, but does not establish whether the prior click missed or the dialog closed. A scrolling/timing cause remains unproven.
+- Baseline comparison: temporarily restored `server.js` to `HEAD` (`8d7f31a`) and disabled the new clock module with an import-time error. The isolated browser run passed **17/17**. Also restored the pre-follow-up order tests for a baseline full-suite run: **50/50 passed**. No disabled-module error occurred. Temporary diagnostics were present in these baseline runs, so timing-sensitive failure reproduction remains a limitation. Baseline command wrappers/logs are local ignored artifacts (`artifacts/clock-baseline.cjs`, `artifacts/clock-baseline-full.cjs`, `artifacts/clock-baseline-browser.log`, `artifacts/clock-baseline-full.log`).
+- All temporary source changes and diagnostics were restored. With the follow-up intact and the original browser helper, `npm test` passed **51/51**, with **zero failures and zero skips**; the isolated order suite passed **13/13**. `npm run test:db` passed **5/5**; build, Prisma validation and `git diff --check` passed. The existing `pg` concurrent-query deprecation warning remains.
+- This investigation changes documentation only. Calendar authority, fail-closed validation, the exact Colombo cutoff, production rejection of demo configuration and real time when unconfigured remain intact. Passing comparisons do not explain the earlier intermittent failure; it may recur.
+
+### Earlier Stage 4 recorded results
 
 - Stage 4 migration applied to the configured local development PostgreSQL database; Prisma schema validation passed.
 - Production frontend build passed.

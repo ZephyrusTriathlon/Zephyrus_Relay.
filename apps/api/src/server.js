@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { createApp } from './app.js';
 import { closeDatabase } from './db.js';
+import { configuredOrderClock } from './order-clock.js';
 // Health has no payload; validate startup input rather than inventing business APIs.
 const config = z.object({
   HOST: z.string().min(1).default('127.0.0.1'),
@@ -8,7 +9,11 @@ const config = z.object({
   RELAY_DEV_READS: z.enum(['true', 'false']).default('false')
 }).parse(process.env);
 if (config.RELAY_DEV_READS === 'true' && process.env.NODE_ENV === 'production') throw new Error('Development read APIs cannot be enabled in production');
-const app = createApp({ devReads: config.RELAY_DEV_READS === 'true' });
+let orderClock;
+try { orderClock = await configuredOrderClock(); }
+catch (error) { await closeDatabase(); throw error; }
+if (orderClock) console.warn(`Demo ordering clock fixed at ${orderClock().toISOString()} (Asia/Colombo business timezone)`);
+const app = createApp({ devReads: config.RELAY_DEV_READS === 'true', orderClock });
 if (process.env.TRUST_PROXY === 'true') app.set('trust proxy', 1);
 const server = app.listen(config.PORT, config.HOST, () => {
   console.log(`Relay API running at http://${config.HOST}:${config.PORT}`);

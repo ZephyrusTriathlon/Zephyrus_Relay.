@@ -24,12 +24,12 @@ test('Colombo cutoff is exclusive at 16:00 across host zones and date boundaries
 test('PostgreSQL order creation, scope, audit history and API restart persistence', {timeout:60000}, async t => {
   const {createApp} = await import('../apps/api/src/app.js');
   const {createDatabase} = await import('../apps/api/src/db.js');
-  let db = createDatabase(), now = new Date('2025-01-03T15:59:00+05:30');
+  let db = createDatabase(), now = new Date('2025-01-03T15:59:00+05:30'), demoClock;
   const instances = [], ids = [], cookies = [];
   const calendarFixtures = [];
   let instance;
   async function start() {
-    const app = createApp({database:() => db,sessionSecret:'stage-four-order-test-secret-32-characters',orderClock:() => now});
+    const app = createApp({database:() => db,sessionSecret:'stage-four-order-test-secret-32-characters',orderClock:() => demoClock ? demoClock() : now});
     const server = app.listen(0,'127.0.0.1');
     await new Promise(resolve => server.once('listening',resolve));
     instance = {app,server,base:`http://127.0.0.1:${server.address().port}/api`}; instances.push(instance);
@@ -51,6 +51,46 @@ test('PostgreSQL order creation, scope, audit history and API restart persistenc
   const {user}=await (await request('/auth/me',cookie)).json();
   const payload={deliveryDate:'2025-01-04',temperatureRequirement:'AMBIENT',items:[{productCode:'STAGE4-TEST',description:'Test cartons',units:3,unitWeightKg:2.125,unitVolumeM3:0.035}]};
   async function create(body=payload) { const r=await request('/orders',cookie,body);assert.equal(r.status,201,JSON.stringify(await r.clone().json()));const {order}=await r.json();ids.push(order.id);return order; }
+  await t.test('explicit judge clock validates supplied coverage and controls context and acceptance only on the server', async () => {
+    const { configuredOrderClock } = await import('../apps/api/src/order-clock.js');
+    const configure = (timestamp, extra = {}) => configuredOrderClock({ env: { RELAY_DEMO_ORDER_NOW: timestamp, ...extra }, database: () => db });
+    assert.equal(await configuredOrderClock({ env: {}, database: () => { throw new Error('Normal startup must not query demo coverage'); } }), undefined);
+    const realApp = createApp({ database: () => db, sessionSecret: 'stage-four-order-test-secret-32-characters', orderClock: await configuredOrderClock({ env: {} }) });
+    const realServer = realApp.listen(0, '127.0.0.1');
+    await new Promise(resolve => realServer.once('listening', resolve));
+    try {
+      const { orderingWindow } = await import('../packages/domain/src/orders.js');
+      const before = orderingWindow(new Date());
+      const { ordering } = await (await fetch(`http://127.0.0.1:${realServer.address().port}/api/orders/context`, { headers: { cookie } })).json();
+      const after = orderingWindow(new Date());
+      assert.ok([before.today, after.today].includes(ordering.today), 'Unconfigured API uses the real server business date');
+      assert.ok([before.nextDayOpen, after.nextDayOpen].includes(ordering.nextDayOpen));
+    } finally { await new Promise(resolve => realServer.close(resolve)); await realApp.locals.sessionStore.close(); }
+    await assert.rejects(configure('2025-01-03T15:59:00+05:30', { NODE_ENV: 'production' }), /forbidden/);
+    await assert.rejects(configure('2026-10-02T15:59:00+05:30'), /supplied CalendarDay/);
+    await assert.rejects(configure('2025-01-03T15:59:00'), /./);
+    try {
+      // UTC Jan 2 is already Jan 3 in Colombo: startup validates the business date.
+      demoClock = await configure('2025-01-02T20:00:00Z');
+      assert.equal((await (await request('/orders/context', cookie)).json()).ordering.today, '2025-01-03');
+      for (const [time, expected, open] of [['15:59:59.999','2025-01-04',true],['16:00:00','2025-01-06',false]]) {
+        demoClock = await configure(`2025-01-03T${time}+05:30`);
+        const context = await (await request('/orders/context?now=2030-01-01', cookie)).json();
+        assert.equal(context.ordering.today, '2025-01-03');
+        assert.equal(context.ordering.timeZone, 'Asia/Colombo');
+        assert.equal(context.ordering.earliestDeliveryDate, expected);
+        assert.equal(context.ordering.nextDayOpen, open);
+        assert.equal(context.ordering.cutoff, '2025-01-03T16:00:00+05:30');
+        if (open) await create();
+        else assert.equal((await (await request('/orders', cookie, payload)).json()).error.code, 'ORDER_CUTOFF');
+      }
+      assert.equal((await request('/orders', cookie, { ...payload, now: '2025-01-03T10:00:00+05:30' })).status, 400);
+      for (const route of ['/orders/clock', '/orders/context', '/clock']) assert.equal((await request(route, cookie, { now: '2025-01-03T10:00:00+05:30' })).status, 404);
+      assert.equal((await (await request('/orders/context', cookie)).json()).ordering.nextDayOpen, false);
+      demoClock().setFullYear(2030);
+      assert.equal(demoClock().toISOString(), '2025-01-03T10:30:00.000Z');
+    } finally { demoClock = undefined; }
+  });
   await t.test('shared calendar rejects closed and unlisted dates without order, item or history writes',async()=>{
     for (const deliveryDate of ['2025-01-05','9999-12-31']) {
       const where={deliveryDate:new Date(`${deliveryDate}T00:00:00Z`)};

@@ -69,13 +69,20 @@ async function connect({isolated=true}={}) {
     throw Error(`Timed out waiting for ${description}`);
   };
   const click = async selector => {
-    const point = await run(`(() => {
+    const point = await run(`(async() => {
       const element = [...document.querySelectorAll(${JSON.stringify(selector)})].find(e => e.getClientRects().length);
       if (!element) throw Error('Visible element missing: ' + ${JSON.stringify(selector)});
       if (element.disabled) throw Error('Control is disabled: ' + ${JSON.stringify(selector)});
-      element.scrollIntoView({ block: 'center', inline: 'nearest' });
+      element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+      // Wait for compositor/layout acknowledgement, not elapsed wall time.
+      // Mobile scrolling can otherwise move the target between measuring it
+      // and dispatching the mouse event under concurrent browser-suite load.
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
       const rect = element.getBoundingClientRect();
-      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      const point = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      if(!element.contains(document.elementFromPoint(point.x,point.y)))throw Error('Control is obscured: ' + ${JSON.stringify(selector)});
+      return point;
     })()`);
     await send('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 });
     await send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button: 'left', clickCount: 1 });

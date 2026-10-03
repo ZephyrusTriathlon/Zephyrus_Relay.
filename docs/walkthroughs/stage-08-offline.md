@@ -88,6 +88,8 @@ Startup distinguishes an authoritative 401/403 from an unreachable API. If conne
 
 The regression suite interrupts startup using CDP request interception plus real network loss. It also tests exact outbox IDs after conflicts, lost responses for all four action types, malformed acknowledgements, and dependency blocking. Reload checks require a new document, login checks require the completed field-cache load, and conflict assertions wait for synchronization and rendering to finish; no success retries or longer arbitrary sleeps are used.
 
+CDP request interception keeps API transport offline across Chrome's cross-document renderer changes, alongside `Network.emulateNetworkConditions`. A server-side counter asserts that zero sync requests escape while offline. Browser contexts are isolated by default. Driver-only fixtures use OUT005 to avoid filling OUT004's bounded Store list while the fixed-clock online walkthrough runs concurrently; the explicit end-to-end fixture still uses OUT004 for Store receipt. A separate deterministic regression covers Store refresh completion when a newer read supersedes an older read, and a logout regression rejects session checks started during an in-flight authentication change.
+
 This protects normal account isolation on a shared browser, not against a compromised OS, browser extension or same-origin script execution while a Driver is unlocked. Use managed devices, HTTPS and the existing CSP; never share an unlocked field session. Browser storage eviction/site-data clearing can remove unsynchronized work, so do not clear site data before syncing.
 
 ## Verification

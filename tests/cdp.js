@@ -81,7 +81,8 @@ async function connect({isolated=true}={}) {
       await new Promise(requestAnimationFrame);
       const rect = element.getBoundingClientRect();
       const point = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-      if(!element.contains(document.elementFromPoint(point.x,point.y)))throw Error('Control is obscured: ' + ${JSON.stringify(selector)});
+      const hit=document.elementFromPoint(point.x,point.y);
+      if(!element.contains(hit))throw Error('Control is obscured: ' + ${JSON.stringify(selector)} + ' ' + JSON.stringify({point,hit:hit?.tagName,hitClass:hit?.className,dialog:document.querySelector('#dialog')?.open,width:innerWidth,height:innerHeight,visual:visualViewport&&{top:visualViewport.offsetTop,height:visualViewport.height,scale:visualViewport.scale}}));
       return point;
     })()`);
     await send('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 });

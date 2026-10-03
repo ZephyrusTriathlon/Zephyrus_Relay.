@@ -4,6 +4,7 @@ import { planningRoutes } from './routes/planning.js';
 import { operationRoutes } from './routes/operations.js';
 import { syncRoutes } from './routes/sync.js';
 import express from 'express';
+import { getDatabase } from './db.js';
 import helmet from 'helmet';
 import { fileURLToPath } from 'node:url';
 import { developmentReads } from './routes/development.js';
@@ -16,13 +17,18 @@ export function createApp({ webRoot = defaultWebRoot, devReads = false, database
   // including JSON parsing, origin, session, and unexpected database failures.
   app.use(['/api/orders', '/api/planning', '/api/operations', '/api/sync'], (_req, res, next) => {
     const json = res.json.bind(res);
-    res.json = body => json(typeof body?.error === 'string' ? { error: { code: ({400:'INVALID_JSON',401:'UNAUTHENTICATED',403:'FORBIDDEN',404:'NOT_FOUND',413:'PAYLOAD_TOO_LARGE',503:'SERVICE_UNAVAILABLE'})[res.statusCode] || 'INTERNAL_ERROR', message: body.error } } : body);
+    res.json = body => json(typeof body?.error === 'string' ? { error: { code: ({400:'INVALID_JSON',401:'UNAUTHENTICATED',403:'FORBIDDEN',404:'NOT_FOUND',413:'PAYLOAD_TOO_LARGE',415:'UNSUPPORTED_MEDIA_TYPE',503:'SERVICE_UNAVAILABLE'})[res.statusCode] || 'INTERNAL_ERROR', message: body.error } } : body);
     next();
   });
   app.use(helmet({ contentSecurityPolicy: { directives: { 'upgrade-insecure-requests': null } } }));
   app.use((req, res, next) => publicPath(req.url) === null ? notFound(res) : next());
   app.use('/api', express.json({ limit: '100kb' }));
   app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'zephyrus-relay-api' }));
+  app.get('/api/ready', async (_req, res) => {
+    res.set('Cache-Control', 'no-store');
+    try { await (database || getDatabase)().user.count(); res.json({ status: 'ready' }); }
+    catch { res.status(503).json({ status: 'unavailable' }); }
+  });
   app.locals.sessionStore = installAuth(app, { database, ...authOptions });
   app.use('/api/orders', orderRoutes({ database, orderClock }));
   app.use('/api/planning', planningRoutes({ database }));

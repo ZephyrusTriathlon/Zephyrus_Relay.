@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:18-bookworm
+    environment:
+      POSTGRES_DB: relay
+      POSTGRES_USER: relay
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - relay-postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U relay -d relay"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  app:
+    build: .
+    ports:
+      - "127.0.0.1:${APP_PORT:-3001}:3001"
+    environment:
+      DATABASE_URL: postgresql://relay:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/relay
+      SESSION_SECRET: ${SESSION_SECRET:?Set a random SESSION_SECRET in .env}
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3001
+      RELAY_DATA_DIR: /app/prisma/judge-data
+      RELAY_ALLOW_SEED: ${RELAY_ALLOW_SEED:-true}
+      RELAY_DEV_READS: "false"
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    init: true
+volumes:
+  relay-postgres:

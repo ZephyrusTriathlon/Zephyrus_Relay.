@@ -81,6 +81,13 @@ test('built frontend entry and every linked asset load from Express', async () =
   }
 });
 
+test('mutations require JSON, including no-payload lifecycle actions', async () => {
+  for(const path of ['/api/auth/login','/api/auth/logout','/api/operations/trips/example/start','/api/sync']) {
+    const response=await fetch(base+path,{method:'POST',headers:{'Content-Type':'text/plain'},body:'{}'});
+    assert.equal(response.status,415,path);
+  }
+});
+
 test('production does not serve private files or traversal paths', async () => {
   for (const pathname of ['/data/test.csv', '/DATA/test.csv', '/.git/config', '/.env', '/package.json', '/README.md', '/server.js', '/src/app.js', '/src/config.js', '/vite.config.js', '/static-policy.js', '/@fs/D:/GitHubProjects/Zephyrus_Relay/.env', '/src/scripts/case-study.js', '/src/styles/case-study.css', '/%2e%2e/src/scripts/script.js', '/data/../src/scripts/script.js', '/%E0%A4%A']) {
     const status = await new Promise((resolve, reject) => {

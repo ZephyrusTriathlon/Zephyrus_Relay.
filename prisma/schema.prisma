@@ -236,7 +236,7 @@ model Order {
 model OrderStatusEvent {
   id        String @id @default(uuid())
   orderId   String
-  order     Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  order     Order @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   status    OrderStatus
   occurredAt DateTime @default(now()) @db.Timestamptz(6)
   note      String

@@ -32,11 +32,15 @@ export function scopeFor(user) {
 export function installAuth(app, { database = getDatabase, sessionStore, sessionSecret = process.env.SESSION_SECRET, production = process.env.NODE_ENV === 'production' } = {}) {
   if (production && (!sessionSecret || sessionSecret.length < 32)) throw new Error('Production requires SESSION_SECRET of at least 32 characters');
   const store = sessionStore ?? new (connectPgSimple(session))({ conObject: { connectionString: process.env.DATABASE_URL, max: 5, connectionTimeoutMillis: 5000 }, errorLog: () => console.error('Session storage unavailable'), tableName: 'Session', createTableIfMissing: false, pruneSessionInterval: false });
-  const cookie = { httpOnly: true, secure: production, sameSite: 'lax', path: '/', maxAge: 8 * 60 * 60 * 1000 };
+  if (process.env.SESSION_COOKIE_SECURE !== undefined && !['true','false'].includes(process.env.SESSION_COOKIE_SECURE)) throw new Error('SESSION_COOKIE_SECURE must be true or false');
+  const secure = process.env.SESSION_COOKIE_SECURE === undefined ? production : process.env.SESSION_COOKIE_SECURE === 'true';
+  const cookie = { httpOnly: true, secure, sameSite: 'lax', path: '/', maxAge: 8 * 60 * 60 * 1000 };
   app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
   // Same-origin JSON mutations; reject browser cross-origin form/login/logout requests.
   app.use('/api', (req, res, next) => {
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && (req.get('sec-fetch-site') === 'cross-site' || (req.get('origin') && req.get('origin') !== `${req.protocol}://${req.get('host')}`))) return res.status(403).json({ error: 'Forbidden origin' });
+    const mutationRoute = /^\/(?:auth\/(?:login|logout)$|orders(?:\/|$)|planning(?:\/|$)|operations(?:\/|$)|sync(?:\/|$))/.test(req.path);
+    if (mutationRoute && !['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !req.is('application/json')) return res.status(415).json({ error: 'JSON content type required' });
     next();
   });
   app.use('/api', session({ name: cookieName, secret: sessionSecret || developmentSecret, store, resave: false, saveUninitialized: false, cookie }));
@@ -68,7 +72,7 @@ export function installAuth(app, { database = getDatabase, sessionStore, session
   });
   app.post('/api/auth/logout', (req, res, next) => req.session.destroy(error => {
     if (error) return next(error);
-    res.clearCookie(cookieName, { httpOnly: true, secure: production, sameSite: 'lax', path: '/' });
+    res.clearCookie(cookieName, { httpOnly: true, secure, sameSite: 'lax', path: '/' });
     res.status(204).end();
   }));
   app.get('/api/auth/me', requireAuth, (req, res) => res.json({ user: req.user }));

@@ -6,6 +6,10 @@ let planningSearch = '';
 let planningDate = '', planningDay = null, planningResult = null, planningError = '';
 let planningBusy = false, planningGeneration = 0;
 let planningOrderIds = [], planningVehicleId = '', planningDeparture = '240', planningRetry = false;
+function savedDepartureMinute(trip) {
+  if(trip.plannedDepartureAt){const parts=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Colombo',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(trip.plannedDepartureAt)).map(p=>[p.type,p.value]));return Number(parts.hour)*60+Number(parts.minute);}
+  return trip.planningContext?.metrics?.departureMinute??240;
+}
 function resetPlanningData() {
   planningGeneration++; serverPlanning=true; planningEdit=null; planningSearch=''; planningDate=''; planningDay=null; planningResult=null;
   planningError=''; planningBusy=false; planningOrderIds=[]; planningVehicleId=''; planningDeparture='240'; planningRetry=false;
@@ -266,7 +270,7 @@ function handleDispatchAction(action,button,o) {
   }
   if(action==='planning-review'){
     const t=planningDay?.trips.find(t=>t.id===button.dataset.trip);
-    if(t?.status==='DRAFT'&&!planningBusy){planningEdit={tripId:t.id,version:t.updatedAt,vehicleId:t.vehicleId,departureMinute:t.planningContext?.metrics?.departureMinute??240,orderIds:t.stops.flatMap(s=>s.allocations.map(a=>a.orderId))};render();}return true;
+    if(t?.status==='DRAFT'&&!planningBusy){planningEdit={tripId:t.id,version:t.updatedAt,vehicleId:t.vehicleId,departureMinute:savedDepartureMinute(t),orderIds:t.stops.flatMap(s=>s.allocations.map(a=>a.orderId))};render();}return true;
   }
   if(['planning-load','planning-validate','planning-allocate','planning-edit','planning-release'].includes(action)){runServerPlanning(action);return true;}
   if(role==='dispatch'&&(serverPlanning||!window.relayDevTools))return false;

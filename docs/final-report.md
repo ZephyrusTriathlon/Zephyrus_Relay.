@@ -100,7 +100,9 @@ HttpOnly/SameSite=Lax and production HTTPS Secure cookies are covered by auth te
 2. Run `docker compose up` from the repository root on a Docker-capable host.
 3. Open http://localhost:3001, log in as `store@relay.demo` / `RelayDemo!26`, and follow the [numbered walkthrough](walkthroughs/judge-walkthrough.md) using 2025-01-02.
 
-## Git
+## Git — implementation-time snapshot
+
+The following diff/status was captured before the Stage 9 implementation was committed as `543f525`. It is historical evidence, not the current worktree status. The earlier submission-readiness verification did not stage, commit or push changes; the subsequent repository closeout was separately authorized to do so.
 
 No files staged, no confidential datasets staged, no commit/push. Historical `docs/designathon/` diff is empty. New public CSVs were generated without reading private data. `git diff --check` exits 0. `git diff --stat` below covers tracked modifications only; untracked additions are listed separately by status.
 

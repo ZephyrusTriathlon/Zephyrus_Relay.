@@ -116,7 +116,7 @@ erDiagram
     }
 ```
 
-`CalendarDay` intentionally has no date foreign keys: future orders may be scheduled beyond an imported calendar. The seed explicitly requires its demonstration date to be an operating day in the supplied calendar. Depot names are derived from the union of referenced supplied depot names and checked for agreement between the two network files; no depot locations or coordinates are invented.
+`CalendarDay` has no date foreign keys at the database level. The order-creation service requires an imported operating day; ordering beyond the current calendar requires importing later authorized dates first. The seed explicitly requires its demonstration date to be an operating day in the supplied calendar. Depot names are derived from the union of referenced supplied depot names and checked for agreement between the two network files; no depot locations or coordinates are invented.
 
 ## Loading, delivery, receipt and synchronization audit
 
@@ -229,4 +229,4 @@ Migration/schema comparison excludes this deliberately SQL-managed Session table
 
 LoadingCheck is unique per allocation with loadedCartons, actor and check time. LoadingIssue and DeliveryException retain type, OPEN/RESOLVED state, details, resolution and timestamps. DeliveryEvent separates client occurrence from recording time. ProofOfDelivery is unique per allocation; ReceiptConfirmation is unique per proof and records the receiving Store Manager/count.
 
-SyncMutation has unique (deviceId, clientMutationId), actorId, entityType/entityId, operation, baseVersion, JSON payload, status, clientOccurredAt, receivedAt, appliedAt and errorCode. Online actions and offline sync use durable idempotency receipts in the operational transaction. Actor/payload/assignment checks precede replay acceptance. A repeated action cannot cross account boundaries. The polymorphic trip reference is validated in services rather than an FK. Client IndexedDB has separate encrypted manifest/outbox records; these are not extra PostgreSQL tables.
+SyncMutation has unique (deviceId, clientMutationId), actorId, entityType/entityId, operation, baseVersion, JSON payload, status, clientOccurredAt, receivedAt, appliedAt and errorCode. Online actions and offline sync use durable idempotency receipts in the operational transaction. Actor/payload/assignment checks precede replay acceptance. A repeated action cannot cross account boundaries. The polymorphic trip reference is validated in services rather than an FK. Client IndexedDB stores manifests and the outbox together in a per-Driver encrypted vault record, with the active offline-access grant in a separate store; these are not extra PostgreSQL tables.

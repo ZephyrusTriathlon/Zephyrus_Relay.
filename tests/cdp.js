@@ -70,20 +70,23 @@ async function connect({isolated=true}={}) {
   };
   const click = async selector => {
     const point = await run(`(async() => {
-      const element = [...document.querySelectorAll(${JSON.stringify(selector)})].find(e => e.getClientRects().length);
-      if (!element) throw Error('Visible element missing: ' + ${JSON.stringify(selector)});
-      if (element.disabled) throw Error('Control is disabled: ' + ${JSON.stringify(selector)});
-      element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
-      // Wait for compositor/layout acknowledgement, not elapsed wall time.
-      // Mobile scrolling can otherwise move the target between measuring it
-      // and dispatching the mouse event under concurrent browser-suite load.
-      await new Promise(requestAnimationFrame);
-      await new Promise(requestAnimationFrame);
-      const rect = element.getBoundingClientRect();
-      const point = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-      const hit=document.elementFromPoint(point.x,point.y);
-      if(!element.contains(hit))throw Error('Control is obscured: ' + ${JSON.stringify(selector)} + ' ' + JSON.stringify({point,hit:hit?.tagName,hitClass:hit?.className,dialog:document.querySelector('#dialog')?.open,width:innerWidth,height:innerHeight,visual:visualViewport&&{top:visualViewport.offsetTop,height:visualViewport.height,scale:visualViewport.scale}}));
-      return point;
+      const find=()=>[...document.querySelectorAll(${JSON.stringify(selector)})].find(e=>e.getClientRects().length);
+      let previous=null;
+      for(let frame=0;frame<60;frame++){
+        const element=find();
+        if(!element)throw Error('Visible element missing: ' + ${JSON.stringify(selector)});
+        if(element.disabled)throw Error('Control is disabled: ' + ${JSON.stringify(selector)});
+        element.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});
+        await new Promise(requestAnimationFrame);
+        // A refresh can replace the node during layout. Reacquire it instead
+        // of reading the detached node's zero rect and clicking (0,0).
+        if(find()!==element){previous=null;continue;}
+        const rect=element.getBoundingClientRect();
+        const point={x:rect.left+rect.width/2,y:rect.top+rect.height/2};
+        if(previous?.element===element&&previous.x===point.x&&previous.y===point.y&&element.contains(document.elementFromPoint(point.x,point.y)))return point;
+        previous={element,...point};
+      }
+      throw Error('Control did not become stable and unobscured: ' + ${JSON.stringify(selector)});
     })()`);
     await send('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 });
     await send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button: 'left', clickCount: 1 });

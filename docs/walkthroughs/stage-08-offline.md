@@ -107,6 +107,19 @@ git diff --check
 
 Run the standalone database suite after the full suite finishes. No destructive reset is used. `tests/offline.test.js` creates uniquely owned trips/orders/vehicles/users and cleans only those IDs. Stage 1–7 test assertions remain unchanged. Its sixteen subtests cover role/assignment/payload boundaries; ordered partial batches; exact exception identity and stale resolution conflicts; cache upgrade/allowlist; real offline reload/application reopening and ordered exception/arrival/POD at 360/390/430; reconnect/Store/Dispatcher/history; interrupted startup; retained outbox IDs and blocked dependencies; lost or mismatched responses for all four mutation types; retained reassignment conflict; authoritative session expiry plus encrypted cross-role/cross-Driver isolation; work saved during logout; and identity checks overlapping logout. Browser clicks reacquire controls after rendering, wait for stable geometry and hit-test before sending a single click. This prevents clicks measured from detached nodes without retrying failed actions.
 
-The earlier 120/120 sign-off was superseded by the Stage 8 re-audit. Final consecutive-run results for the corrected implementation are recorded below only after verification. The host has Node 22.18.0 and npm 11.6.2; no Node 24+ installation was found in PATH or the installed NVM manager. The repository's Node 24+ requirement is unchanged. The existing PostgreSQL adapter emits a non-failing concurrent-query deprecation warning.
+The earlier 120/120 sign-off was superseded by the Stage 8 re-audit. After the correctness, fixture-isolation and browser synchronization fixes, final verification on 2026-10-03 produced:
+
+| Check | Result |
+| --- | --- |
+| Full regression, consecutive run 1 | 128/128; 0 failures, cancellations or skips |
+| Full regression, consecutive run 2 | 128/128; 0 failures, cancellations or skips |
+| Real offline/CDP, consecutive run 1 | 17/17; 0 failures, cancellations or skips |
+| Real offline/CDP, consecutive run 2 | 17/17; 0 failures, cancellations or skips |
+| Real offline/CDP, consecutive run 3 | 17/17; 0 failures, cancellations or skips |
+| Standalone database, after those suites | 5/5 |
+| Production build / Prisma validation | Both passed |
+| `git diff --check` and diff from Stage 7 | Passed |
+
+These final consecutive runs required no retries or timeout changes. Browser runtime-error assertions passed. Earlier diagnostic failures are not counted as successful verification runs. The host has Node 22.18.0 and npm 11.6.2; no Node 24+ installation was found in PATH or the installed NVM manager. The repository's Node 24+ requirement is unchanged. The existing PostgreSQL adapter emits a non-failing concurrent-query deprecation warning.
 
 Limitations: route start, loading, planning, Store receipt and external map navigation need a connection; only a previously opened authorized Driver manifest works offline. Background Sync is not required. Conflicts require review rather than automatic overwrite. Development-only historical simulation remains gated by `VITE_ENABLE_DEV_TOOLS=true` and is not evidence of real offline functionality.

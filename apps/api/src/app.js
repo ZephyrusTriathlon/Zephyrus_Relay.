@@ -2,6 +2,7 @@ import { installAuth } from './auth.js';
 import { orderRoutes } from './routes/orders.js';
 import { planningRoutes } from './routes/planning.js';
 import { operationRoutes } from './routes/operations.js';
+import { syncRoutes } from './routes/sync.js';
 import express from 'express';
 import helmet from 'helmet';
 import { fileURLToPath } from 'node:url';
@@ -13,7 +14,7 @@ export function createApp({ webRoot = defaultWebRoot, devReads = false, database
   app.disable('x-powered-by');
   // Keep the Stage 1–3 response contract; all order errors use one structured envelope,
   // including JSON parsing, origin, session, and unexpected database failures.
-  app.use(['/api/orders', '/api/planning', '/api/operations'], (_req, res, next) => {
+  app.use(['/api/orders', '/api/planning', '/api/operations', '/api/sync'], (_req, res, next) => {
     const json = res.json.bind(res);
     res.json = body => json(typeof body?.error === 'string' ? { error: { code: ({400:'INVALID_JSON',401:'UNAUTHENTICATED',403:'FORBIDDEN',404:'NOT_FOUND',413:'PAYLOAD_TOO_LARGE',503:'SERVICE_UNAVAILABLE'})[res.statusCode] || 'INTERNAL_ERROR', message: body.error } } : body);
     next();
@@ -26,12 +27,14 @@ export function createApp({ webRoot = defaultWebRoot, devReads = false, database
   app.use('/api/orders', orderRoutes({ database, orderClock }));
   app.use('/api/planning', planningRoutes({ database }));
   app.use('/api/operations', operationRoutes({ database }));
+  app.use('/api/sync', syncRoutes({ database }));
   app.use('/api', developmentReads({ enabled: devReads, database }));
   app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
   app.use((req, res, next) => {
     const file = publicPath(req.url);
-    const allowed = file === 'index.html' || legacyScripts.includes(file) || /^assets\/[\w.-]+\.(js|css)$/.test(file);
+    const allowed = file === 'index.html' || file === 'sw.js' || legacyScripts.includes(file) || /^assets\/[\w.-]+\.(js|css)$/.test(file);
     if (!['GET', 'HEAD'].includes(req.method) || !allowed || !containedFile(webRoot, file)) return notFound(res);
+    if(file==='sw.js')res.set('Cache-Control','no-cache');
     res.sendFile(file, { root: webRoot }, error => { if (error) next(error); });
   });
   app.use((error, _req, res, next) => {

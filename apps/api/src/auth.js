@@ -1,7 +1,7 @@
 import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import bcrypt from 'bcrypt';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHmac } from 'node:crypto';
 import { getDatabase } from './db.js';
 
 const safeUser = { id: true, email: true, displayName: true, role: true, outletId: true, depotId: true, active: true };
@@ -72,6 +72,10 @@ export function installAuth(app, { database = getDatabase, sessionStore, session
     res.status(204).end();
   }));
   app.get('/api/auth/me', requireAuth, (req, res) => res.json({ user: req.user }));
+  // Only this authenticated Driver can unlock their encrypted field vault.
+  // No credential/session token is persisted in IndexedDB. Keep SESSION_SECRET
+  // stable across deployments while unsynchronized field work exists.
+  app.get('/api/driver/offline-access',requireRole('DRIVER'),(req,res)=>res.json({userId:req.user.id,key:createHmac('sha256',sessionSecret||developmentSecret).update('relay-field-v1:'+req.user.id).digest('hex')}));
   for (const [path, role] of [['dispatcher', 'DISPATCHER'], ['driver', 'DRIVER'], ['loader', 'LOADER'], ['store', 'STORE_MANAGER']]) {
     app.get(`/api/${path}/scope`, requireRole(role), (req, res) => res.json({ scope: scopeFor(req.user) }));
   }

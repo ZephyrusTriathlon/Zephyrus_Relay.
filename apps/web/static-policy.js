@@ -1,6 +1,6 @@
 import { realpathSync } from 'node:fs';
 import path from 'node:path';
-export const legacyScripts = ['workspace', 'dispatch', 'store', 'field', 'script'].map(name => `src/scripts/${name}.js`);
+export const legacyScripts = ['workspace', 'dispatch', 'store', 'field', 'offline', 'script'].map(name => `src/scripts/${name}.js`);
 export const sourceFiles = new Set(['index.html', 'src/config.js', ...legacyScripts,
   ...['styles', 'dispatch', 'store', 'field'].map(name => `src/styles/${name}.css`)]);
 

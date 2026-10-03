@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 /** Small dependency-free Chrome DevTools client for the local prototype. */
-async function connect({isolated=false}={}) {
+async function connect({isolated=true}={}) {
   const endpoint = process.env.RELAY_CDP_URL || 'http://127.0.0.1:9222';
   let target,contextId,control,controlSend;
   if(isolated){
@@ -27,8 +27,10 @@ async function connect({isolated=false}={}) {
   let serial = 0;
   const pending = new Map();
   const errors = [];
+  const listeners = new Map();
   socket.addEventListener('message', event => {
     const message = JSON.parse(event.data);
+    for(const listener of listeners.get(message.method)||[])listener(message.params);
     if (message.id) {
       const request = pending.get(message.id);
       if (request) {
@@ -115,7 +117,8 @@ async function connect({isolated=false}={}) {
   };
   await send('Runtime.enable');
   await send('Page.enable');
-  return { send, run, waitFor, pause, click, input, key, viewport, screenshot, navigate, errors, close };
+  const on=(method,listener)=>{if(!listeners.has(method))listeners.set(method,new Set());listeners.get(method).add(listener);return ()=>listeners.get(method).delete(listener);};
+  return { send, run, waitFor, pause, click, input, key, viewport, screenshot, navigate, errors, close, on };
 }
 
 module.exports = { connect };

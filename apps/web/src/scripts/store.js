@@ -4,6 +4,7 @@ let storeData = null, storeOwner = null, storeError = '', storeLoading = false;
 let storeTemperature = 'AMBIENT', storeDate = '', storeOffset = 0, storeSubmitting = false;
 let storeGeneration = 0;
 let storeReadSequence = 0;
+let storeReadPromise = null;
 function resetStoreData() {
   storeGeneration++; storeData = null; storeOwner = null; storeError = ''; storeLoading = false;
   storeDate = ''; storeOffset = 0; storeTemperature = 'AMBIENT'; stockFilter = 'all'; productQuery = ''; quantities = products.map(() => 0);
@@ -20,6 +21,7 @@ async function loadStoreOrders() {
   const owner = currentAccount().id, generation = storeGeneration;
   const sequence = ++storeReadSequence;
   storeLoading = true; storeError = '';
+  const read = (async()=>{
   try {
     const [context, listing] = await Promise.all([storeRequest('/context'), storeRequest(`?limit=20&offset=${storeOffset}`)]);
     if (sequence !== storeReadSequence || generation !== storeGeneration || currentAccount()?.id !== owner) return;
@@ -27,6 +29,16 @@ async function loadStoreOrders() {
     if (!storeDate) storeDate = context.ordering.earliestDeliveryDate ?? '';
   } catch (error) { if (sequence === storeReadSequence && generation === storeGeneration) storeError = error.message; }
   finally { if (sequence === storeReadSequence && generation === storeGeneration) { storeLoading = false; if (currentAccount()?.workspace === 'store') render(); } }
+  })();
+  storeReadPromise=read;
+  // A post-create refresh must not return while a newer focus/refresh read is
+  // still in flight. The latest read owns the view; await that actual work.
+  let pending=read;
+  while(pending){
+    await pending;
+    if(generation!==storeGeneration||currentAccount()?.id!==owner||storeReadPromise===pending)return;
+    pending=storeReadPromise;
+  }
 }
 function storeOwnOrders() { return storeOwner === currentAccount()?.id ? storeData?.orders || [] : []; }
 function storeStock(p) { return {stock:p.stock, incoming:0, suggested:p.recommend, health:p.health, cover:'Demo stock estimate'}; }

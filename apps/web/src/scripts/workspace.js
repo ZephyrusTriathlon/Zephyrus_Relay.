@@ -6,9 +6,14 @@ let sessionNotice = "";
 const currentAccount = () => authenticatedUser;
 const accountRole = account => ({STORE_MANAGER:'Store Manager',DISPATCHER:'Dispatcher',LOADER:'Loader',DRIVER:'Driver'})[account.role];
 async function authRequest(path, body) {
+  if(path==='login'&&typeof driverOffline!=='undefined'){await driverOffline.lock();driverOffline.notifyIdentity();}
   if(body !== undefined) identityGeneration++;
-  const response = await fetch('/api/auth/' + path, { credentials: 'same-origin', cache: 'no-store',
+  if(!navigator.onLine)throw new TypeError('Offline');
+  const response = await fetch('/api/auth/' + path, { credentials: 'same-origin', cache: 'no-store',signal:AbortSignal.timeout(8000),
     ...(body !== undefined ? {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)} : {}) });
+  // Also invalidate checks started while login/logout was in flight. They may
+  // have observed the old session before the server committed the change.
+  if(body !== undefined) identityGeneration++;
   if (!response.ok) {
     const error = new Error((await response.json()).error || 'Authentication unavailable');
     error.status = response.status;
@@ -26,12 +31,18 @@ async function refreshIdentity() {
     if(generation !== identityGeneration)return;
     sessionNotice = '';
     authenticatedUser = {...user, name:user.displayName, workspace:({DISPATCHER:'dispatch',STORE_MANAGER:'store',LOADER:'loader',DRIVER:'delivery'})[user.role]};
+    await driverOffline.activate(user);
   } catch (error) {
     if(generation !== identityGeneration)return;
+    const offlineUser=(!error.status||error.status>=500)?await driverOffline.restore().catch(()=>null):null;
+    if(offlineUser){authenticatedUser={...offlineUser,name:offlineUser.displayName,workspace:'delivery'};sessionNotice='';}
+    else {
+    if(error.status===401||error.status===403)await driverOffline.lock();
     if(authenticatedUser)sessionNotice = error.status === 401 ? 'Your session has expired. Please sign in again.' : 'Unable to verify your session. Please try signing in again.';
     else if(error.status !== 401)sessionNotice = 'Authentication service unavailable. Please try again.';
     authenticatedUser = null;
     closeDialog();
+    }
   }
   identityReady = true;
   if(!wasReady || previous !== JSON.stringify(authenticatedUser) || previousNotice !== sessionNotice) { resetStoreData(); resetPlanningData(); resetFieldData(); closeDialog(); render(); }
@@ -39,8 +50,10 @@ async function refreshIdentity() {
   else if(['loader','delivery'].includes(authenticatedUser?.workspace)) loadFieldTrips();
 }
 async function signOut() {
-  try { await authRequest('logout', {}); sessionNotice=''; authenticatedUser=null; resetStoreData(); resetPlanningData(); resetFieldData(); closeDialog(); render(); document.querySelector('#login-id').focus(); }
-  catch { toast('Sign out failed. Please retry.'); }
+  try {
+    if(!await driverOffline.maySignOut())return;
+    await authRequest('logout', {});const retained=await driverOffline.clear();driverOffline.notifyIdentity();sessionNotice=retained?'Saved deliveries were retained securely. Sign in again to synchronize.':''; authenticatedUser=null; resetStoreData(); resetPlanningData(); resetFieldData(); closeDialog(); render(); document.querySelector('#login-id').focus();
+  } catch { toast(navigator.onLine?'Sign out failed. Please retry.':'Reconnect to sign out safely. Saved deliveries are retained.'); }
 }
 window.addEventListener('focus', () => { if (identityReady) refreshIdentity(); });
 setInterval(() => { if (authenticatedUser) refreshIdentity(); }, 60000);

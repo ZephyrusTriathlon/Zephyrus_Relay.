@@ -29,7 +29,7 @@ async function loadFieldTrips() {
   if(!['loader','delivery'].includes(currentAccount()?.workspace)||!usesOnlineField())return;
   const owner=currentAccount().id, generation=identityGeneration,sequence=++fieldReadSequence;fieldLoading=true;fieldError='';
   const current=()=>currentAccount()?.id===owner&&generation===identityGeneration&&sequence===fieldReadSequence;
-  try { const data=await operationRequest('/trips');if(!current())return;fieldTrips=data.trips;fieldOwner=owner;if(!selectedFieldTrip())fieldTripId=fieldTrips[0]?.id||''; }
+  try { const data=await (currentAccount().role==='DRIVER'?driverOffline.refresh():operationRequest('/trips'));if(!current())return;fieldTrips=data.trips;fieldOwner=owner;if(!selectedFieldTrip())fieldTripId=fieldTrips.find(t=>t.id===driverOffline.selectedTrip())?.id||fieldTrips[0]?.id||''; }
   catch(e){if(current())fieldError=e.message;}
   finally{if(current()){fieldLoading=false;render();}}
 }
@@ -51,14 +51,19 @@ function onlineFieldView(loader) {
   if(fieldOwner!==currentAccount().id&&!fieldLoading&&!fieldError)queueMicrotask(loadFieldTrips);
   const trip=selectedFieldTrip();
   const toolbar=`<div class="toolbar"><label>Trip <select class="input" id="field-trip">${fieldTrips.map(t=>`<option value="${esc(t.id)}" ${t.id===fieldTripId?'selected':''}>${esc(t.tripNumber)} · ${esc(t.status)}</option>`).join('')}</select></label><button class="btn" data-action="field-refresh">Refresh</button></div>`;
-  if(fieldError)return `${toolbar}<p class="notice" role="alert">${esc(fieldError)}</p>`;
-  if(!trip)return `${heading(loader?'Warehouse':'Delivery',loader?'Every carton. In the right order.':'Morning route',fieldLoading?'Loading your assignments…':'No released trips are available for your assignment.')}${toolbar}`;
+  if(fieldError)return `${toolbar}${loader?'':driverOffline.banner()}<p class="notice" role="alert">${esc(fieldError)}</p>`;
+  if(!trip)return `${heading(loader?'Warehouse':'Delivery',loader?'Every carton. In the right order.':'Morning route',fieldLoading?'Loading your assignments…':'No released trips are available for your assignment.')}${toolbar}${loader?'':driverOffline.banner()}`;
   state.confirmed=true;state.ready=['READY','IN_PROGRESS','COMPLETED'].includes(trip.status);state.started=['IN_PROGRESS','COMPLETED'].includes(trip.status);state.offline=false;state.pending=[];
   fieldOrders=fieldProjection();
   let html=(loader?legacyLoaderView():legacyDeliveryView());
   html=html.replaceAll('R-07 / FRESH / COLOMBO / TRIP 1',esc(trip.tripNumber)).replaceAll('R-07 · Fresh · Colombo · Trip 1',esc(trip.tripNumber)).replaceAll('R-07',esc(trip.tripNumber)).replaceAll('04:45',esc(fieldDeparture(trip.plannedDepartureAt))).replaceAll('Peliyagoda',esc(trip.depot.name)).replaceAll('Fresh pre-dawn window',esc(trip.deliveryDate.slice(0,10))+' · Colombo time').replaceAll('across Colombo','on this route').replaceAll('Progress shared in this demo workspace.','Progress saved to the server. Use controls only while safely stopped.');
   html=html.replace(/<div class="driver-route-note">[\s\S]*?<\/div><\/aside>/,'<div class="driver-route-note"><p>Online connection required. Use delivery controls only while safely stopped.</p></div></aside>');
-  return toolbar+html;
+  if(!loader){
+    html=html.replace('Online connection required. Use delivery controls only while safely stopped.','Saved deliveries synchronize when connected. Use delivery controls only while safely stopped.');
+    if(driverOffline.details().pending)html=html.replace('Progress saved to the server.','Saved on this device. Pending sync.').replace('Every delivery recorded.','Deliveries saved. Pending sync.').replace('Resolve any outstanding receipt discrepancies with the receiving stores, then complete your route.','Your saved deliveries will be checked when you reconnect.').replace(/<button class="btn primary wide" data-action="complete-route">[\s\S]*?<\/button>/,'<p>Reconnect to confirm all saved deliveries with your team.</p>');
+    if(driverOffline.unreachable())html=html.replace(/<a class="btn" href="https:\/\/www.google.com\/maps[^>]*>[\s\S]*?<\/a>/g,'<span class="btn" aria-disabled="true">Maps need a connection</span>');
+  }
+  return toolbar+(loader?'':driverOffline.banner())+html;
 }
 function loaderView(){return usesOnlineField()?onlineFieldView(true):legacyLoaderView();}
 function deliveryView(){return usesOnlineField()?onlineFieldView(false):legacyDeliveryView();}
@@ -83,7 +88,10 @@ async function mutateField(action,button,o) {
     body={recipient:document.querySelector('#recipient')?.value||'',cartons:Number(document.querySelector('#verified-cartons')?.value),verified:!!document.querySelector('#verified')?.checked,deliveredAt:`${date}T${time}:00+05:30`};
   }
   fieldBusy=true;button.disabled=true;
-  try{await operationRequest(`/trips/${encodeURIComponent(trip.id)}${o&&!['start','complete-loading'].includes(operation)?`/allocations/${encodeURIComponent(o.id)}`:''}/${operation}`,body);if(owner!==currentAccount()?.id||generation!==identityGeneration)return;closeDialog();await loadFieldTrips();toast('Saved to the server.');}
+  try{
+    if(role==='delivery'&&driverOffline.supports(operation))await driverOffline.mutate(trip,o,operation,body);
+    else await operationRequest(`/trips/${encodeURIComponent(trip.id)}${o&&!['start','complete-loading'].includes(operation)?`/allocations/${encodeURIComponent(o.id)}`:''}/${operation}`,body);
+    if(owner!==currentAccount()?.id||generation!==identityGeneration)return;closeDialog();await loadFieldTrips();toast(role==='delivery'&&driverOffline.details().pending?'Saved on this device. Pending sync.':'Saved to the server.');}
   catch(e){if(owner===currentAccount()?.id){if(document.querySelector('#dialog').open)fieldFormError(e.message);else toast(e.message);}}
   finally{fieldBusy=false;button.disabled=false;}
 }
@@ -174,6 +182,7 @@ function fieldResolution(o,retry=false) {
 function handleFieldAction(action,button,o) {
   if(!['loader','delivery'].includes(role))return false;
   if(usesOnlineField()) {
+    if(action==='driver-sync'){driverOffline.synchronize(true);return true;}
     o=fieldOrders.find(a=>a.id===button.dataset.id);
     if(action==='field-refresh'){loadFieldTrips();return true;}
     if(['loaded','complete-loading','save-issue','resolved','start-route','complete-route','arrived','delivered'].includes(action)){mutateField(action,button,o);return true;}
@@ -238,7 +247,7 @@ function handleFieldAction(action,button,o) {
   }
 }
 function bindFieldInputs() {
-  document.querySelector('#field-trip')?.addEventListener('change',e=>{fieldTripId=e.target.value;render();});
+  document.querySelector('#field-trip')?.addEventListener('change',e=>{fieldTripId=e.target.value;driverOffline.remember(fieldTripId).catch(()=>toast('Unable to save your trip selection.'));render();});
   if(usesOnlineField())document.querySelectorAll('[data-action="offline"]').forEach(e=>e.remove());
 }
 document.addEventListener('input',event=>{

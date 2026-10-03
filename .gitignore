@@ -9,3 +9,5 @@ data/
 .browser-qa-*/
 artifacts/
 test-results/
+
+/.zip

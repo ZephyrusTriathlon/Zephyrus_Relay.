@@ -5,7 +5,7 @@ import { parse } from 'csv-parse/sync';
 import { z } from 'zod';
 import { Brand, DockType, ParkingConstraint, VehicleType, TemperatureCapability, FuelType, RecordSource } from '../packages/domain/src/index.js';
 
-export const defaultDataDir = fileURLToPath(new URL('../data/', import.meta.url));
+export const defaultDataDir = fileURLToPath(new URL('./judge-data/', import.meta.url));
 const text = z.string().min(1).max(100);
 const time = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
 const positive = z.string().regex(/^\d+(?:\.\d{1,3})?$/).refine(value => Number(value) > 0 && Number(value) < 1000000);
@@ -55,6 +55,7 @@ function unique(rows, key, filename) {
   if (new Set(rows.map(row => row[key])).size !== rows.length) throw new Error(`${filename}: duplicate primary keys`);
 }
 export async function loadNetwork(dataDir = process.env.RELAY_DATA_DIR || defaultDataDir) {
+  dataDir = path.resolve(fileURLToPath(new URL('../', import.meta.url)), dataDir);
   async function load(filename, schema) {
     let contents;
     try { contents = await readFile(path.join(dataDir, 'General Data', filename), 'utf8'); }

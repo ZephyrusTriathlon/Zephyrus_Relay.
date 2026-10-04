@@ -17,16 +17,16 @@ PowerShell: use `Copy-Item .env.example .env` for the first command. Open **http
 
 All four judge accounts use **RelayDemo!26**, via the ordinary login form:
 
-| Email / employee ID | Role and scope |
-| --- | --- |
-| store@relay.demo / store | Store Manager, OUT004 |
-| dispatcher@relay.demo / dispatcher | Dispatcher |
-| loader@relay.demo / loader | Loader, Peliyagoda depot |
-| driver@relay.demo / driver | Driver assigned to TRIP-2025-01-02-01 |
+| Name | Email / employee ID | Role and scope |
+| --- | --- | --- |
+| Nimasha Perera | store@relay.demo / store | Store Manager, OUT004 |
+| Dinuka Fernando | dispatcher@relay.demo / dispatcher | Dispatcher |
+| Kasun Silva | loader@relay.demo / loader | Loader, Peliyagoda depot |
+| Amal Perera | driver@relay.demo / driver | Driver assigned to TRIP-2025-01-02-01 |
 
 ## Numbered judge walkthrough
 
-Judge mode is explicit: **RELAY_JUDGE_MODE=true** with **RELAY_JUDGE_ORDER_NOW=2025-01-01T15:00:00+05:30**. The UI displays this fixed historical business date. It enables new orders using the original supplied calendar in an isolated judge database; login/session expiry and actual delivery timestamps still use real time. No OS clock change or browser console command is needed.
+Judge mode is explicit: **RELAY_JUDGE_MODE=true** with **RELAY_JUDGE_ORDER_NOW=2025-01-01T15:00:00+05:30**. A small note beside Store ordering identifies this fixed historical business date. It enables new orders using the original supplied calendar in an isolated judge database; login/session expiry and actual delivery timestamps still use real time. No OS clock change or browser console command is needed.
 
 1. Start the fresh seeded stack, open the app, and sign in as **store** using **RelayDemo!26**. In Replenishment, select Ambient, Chilled or Frozen, add full cartons, and request **2025-01-03**. Review and place the order; note its reference in Order tracking. Separate temperature categories use separate orders.
 2. Sign out and sign in as **dispatcher**. Load **2025-01-02** to inspect the seeded main route **TRIP-2025-01-02-01**, van-only order and oversized deferred order. Read the calendar context and saved deferral explanation. Select the van-only order and validate a truck to demonstrate rejection.
@@ -113,7 +113,7 @@ Planning enforces weight, volume, refrigeration, van-only access, depot, deliver
 
 Only the Driver supports durable offline mutation. Start/finish reconciliation and initial login/cache acquisition need connectivity; Loader and Store mutations require online service. Browser storage deletion/eviction can lose unsynchronized work. Another account cannot unlock the former Driver's encrypted vault. Unresolved conflicts remain visible and require operational resolution; there is no silent overwrite/discard.
 
-The supplied calendar ends 2026-06-28. Default judge setup explicitly enables a historical business clock for ordering, including production deployments with only seeded demo accounts. A visible banner discloses it. Set RELAY_JUDGE_MODE=false for real operations; current ordering then needs authorized current calendar coverage. RELAY_DEMO_ORDER_NOW remains a separate development-only option and must not be combined with judge mode. Assisted allocation creates unassigned drafts; release requires active Driver assignment. The server catalogue owns carton weight, volume and temperature; it includes frozen goods. Account provisioning, Driver availability optimization, inventory integration and live maps remain outside this implementation.
+The supplied calendar ends 2026-06-28. Default judge setup explicitly enables a historical business clock for ordering, including production deployments with only seeded demo accounts. A small note beside Store ordering discloses the date. Set RELAY_JUDGE_MODE=false for real operations; current ordering then needs authorized current calendar coverage. RELAY_DEMO_ORDER_NOW remains a separate development-only option and must not be combined with judge mode. Assisted allocation creates unassigned drafts; release requires active Driver assignment. The server catalogue owns carton weight, volume and temperature; it includes frozen goods. Account provisioning, Driver availability optimization, inventory integration and live maps remain outside this implementation.
 
 ## Significant departures from Designathon
 

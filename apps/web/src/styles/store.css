@@ -23,6 +23,10 @@
 .store-recommend .icon{width:16px;height:16px}
 .store-recommend-short{display:none}
 .store-filters{display:flex;gap:12px;margin-bottom:16px}
+.store-order-controls{display:grid;grid-template-columns:minmax(0,200px) minmax(0,260px);gap:14px;margin-bottom:16px;align-items:start}
+.store-order-field{display:flex;flex-direction:column;gap:6px;min-width:0;font-size:13px;color:var(--text)}
+.store-order-field .filter-select,.store-order-field .input{width:100%;min-width:0;min-height:46px;margin:0}
+.store-scenario-note{font-size:12px;line-height:1.5;color:var(--muted);margin:-6px 0 16px}
 .store-filters .search{flex:1;max-width:400px;min-height:44px;padding:10px 12px}
 .store-filters .search:focus-within{outline:3px solid #82aa9270;outline-offset:2px;border-color:var(--accent)}
 .store-filters .search input{font-size:14px;min-width:0}
@@ -153,7 +157,6 @@
   .catalogue-table .store-product-row { grid-template-columns:minmax(0,1fr); }
   .catalogue-table .store-product-row .store-quantity-cell { grid-column:1; grid-row:2; width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; }
   .catalogue-table .store-mobile-label { display:block; margin:0; }
-  .store-filters:has(#store-date) { display:grid; grid-template-columns:minmax(0,1fr); }
-  .store-filters:has(#store-date) .filter-select { width:100%; margin-top:6px; }.store-filters input[type="date"] { width:100%; margin-top:6px; }
+  .store-order-controls { grid-template-columns:minmax(0,1fr); }
   .store-toolbar .tabs { gap:16px; }
 }

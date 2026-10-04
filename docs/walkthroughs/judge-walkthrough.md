@@ -1,6 +1,6 @@
 # Final judge walkthrough
 
-Use the root README Docker or local built-app setup on a fresh database. The default exact supplied network is documented in `prisma/judge-data/README.md`. Every login below uses password **RelayDemo!26**. This intentionally starts with historical seeded orders so judging does not depend on today's date falling inside the reference calendar. Explicit judge mode fixes only the ordering business clock at 2025-01-01 15:00 Colombo, with a visible banner. Security/session and delivery/POD audit timestamps use actual time. The root README also includes new-order and deferred carry-forward steps.
+Use the root README Docker or local built-app setup on a fresh database. The default exact supplied network is documented in `prisma/judge-data/README.md`. Every login below uses password **RelayDemo!26**. This intentionally starts with historical seeded orders so judging does not depend on today's date falling inside the reference calendar. Explicit judge mode fixes only the ordering business clock at 2025-01-01 15:00 Colombo, with a small date note beside Store ordering. Security/session and delivery/POD audit timestamps use actual time. The root README also includes new-order and deferred carry-forward steps.
 
 Main record: **TRIP-2025-01-02-01**, ID `demo-trip-01`, **VEH001**, Peliyagoda, Driver `driver@relay.demo`. Stop 1 **OUT004** has CHILLED (12 cartons) and AMBIENT (8); stop 2 **OUT005** has SECOND-STOP (10). All order numbers begin `ORD-2025-01-02-`. The Store account owns OUT004 only. The capacity order has 554 cartons in the bundled network and remains deferred.
 
@@ -25,15 +25,15 @@ Main record: **TRIP-2025-01-02-01**, ID `demo-trip-01`, **VEH001**, Peliyagoda, 
 19. Log in as **driver@relay.demo**, select **TRIP-2025-01-02-01**, and wait for **Trip saved for offline use.** The assigned additional trip can also appear; select the named main trip.
 20. Click **Start route** online. Expect IN_PROGRESS, with OUT004 next. Start is server-validated and requires READY.
 21. Click **I've arrived** at OUT004. Its two orders share one physical arrival.
-22. Click **Verify & confirm delivery** for the first displayed OUT004 order. Keep its expected carton count, enter recipient **Judge OUT004**, enter the current Colombo delivery time if not prefilled, tick verification and click **Confirm delivery**. Repeat for the other OUT004 order (8 or 12 cartons as displayed). Both real PODs should persist; OUT005 becomes next.
+22. Click **Verify & confirm delivery** for the first displayed OUT004 order. Keep its expected carton count, enter recipient **Sahan Jayawardena**, enter the current Colombo delivery time if not prefilled, tick verification and click **Confirm delivery**. Repeat for the other OUT004 order (8 or 12 cartons as displayed). Both real PODs should persist; OUT005 becomes next.
 23. Open Chrome DevTools → Network → throttling dropdown → **Offline**. This is the exact Stage 8 real-network demonstration; do not enable developer simulation controls.
 24. Reload. Expect the cached Driver route and **Offline** status; the next stop is OUT005. A previously activated Service Worker and authorized cached trip are required.
-25. Click **I've arrived** at OUT005. Expect a pending action. Click **Verify & confirm delivery**, keep **10** cartons, enter **Judge OUT005**, tick verification, set delivery time and **Confirm delivery**. Expect **Pending sync**, not confirmed server completion.
+25. Click **I've arrived** at OUT005. Expect a pending action. Click **Verify & confirm delivery**, keep **10** cartons, enter **Tharushi Silva**, tick verification, set delivery time and **Confirm delivery**. Expect **Pending sync**, not confirmed server completion.
 26. Reload while Offline. Expect saved progress and pending actions to remain. Account sign-out must refuse to discard pending work.
 27. Change Network to **No throttling**. Expect **Syncing** (possibly brief) then **Synced**, zero pending actions and authoritative route refresh. Use **Sync now** if needed. A Needs attention state is a real conflict, not success; follow the [Stage 8 conflict guidance](stage-08-offline.md).
 28. Confirm **COMPLETED** / **A good run. Every store replenished.** The final accepted POD normally completes the route automatically; if a resolved receipt exception kept it open, use **Complete route** after reconciliation.
 29. Choose **Account → Sign out**.
-30. Log in as **store@relay.demo** and open **Order tracking**. Both OUT004 orders show Delivered, **Judge OUT004**, carton counts, time and POD. OUT005 is outside this Store's scope.
+30. Log in as **store@relay.demo** and open **Order tracking**. Both OUT004 orders show Delivered, **Sahan Jayawardena**, carton counts, time and POD. OUT005 is outside this Store's scope.
 31. On CHILLED, select **View receipt**, inspect 12 cartons and recipient, then **Confirm receipt** (or report a discrepancy, resolve it with details, then confirm). Expect Received (RECEIVED). Close the confirmed receipt dialog with its **Close dialog** button.
 32. On AMBIENT, select **View receipt**, inspect 8 cartons and recipient, then **Confirm receipt**. Expect Received. Close the dialog.
 33. Reload and reopen tracking. Both receipts must remain confirmed; the capacity order remains deferred. This verifies persisted state rather than browser fixture data.

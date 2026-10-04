@@ -46,8 +46,12 @@ export async function seedNetwork(db, { dataDir } = {}) {
       // Upgrade Stage 2 accounts once; never reset an existing password on repeat seed.
       await tx.user.updateMany({ where: { id: user.id, source: RecordSource.DEMO, passwordHash: null },
         data: { email: user.email, depotId: user.depotId, passwordHash: passwordHashes[index] } });
-      // Label-only upgrades preserve credentials and operational progress.
-      await tx.user.updateMany({where:{id:user.id,source:RecordSource.DEMO,displayName:`Relay demo ${user.role.toLowerCase().replace('_',' ')}`},data:{displayName:user.displayName}});
+      // Rename only known placeholder labels; preserve custom names, credentials and operational progress.
+      const roleLabel = user.role.toLowerCase().replaceAll('_', ' ');
+      await tx.user.updateMany({
+        where: { id: user.id, source: RecordSource.DEMO, displayName: { in: [`Judge ${roleLabel}`, `Relay demo ${roleLabel}`] } },
+        data: { displayName: user.displayName }
+      });
     }
     for (const { item, ...order } of demo.orders) {
       await createOnce('order', {...order,requestedDeliveryDate:order.deliveryDate});

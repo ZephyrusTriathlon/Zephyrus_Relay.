@@ -37,13 +37,13 @@ document.addEventListener('click',e=>{const button=e.target.closest('[data-role]
 if(sessionAction==='close'){closeDialog();return;}
 if(!currentAccount())return;
 if(sessionAction==='sign-out'){signOut();return;}
-if(sessionAction==='account'){const account=currentAccount();openDialog(`<h2>${esc(account.name)}</h2><p>${accountRole(account)}<br>${esc(account.email)}</p><button class="btn wide" data-action="sign-out">Sign out</button>`);return;}
+if(sessionAction==='account'){const account=currentAccount();openDialog(`<h2>${esc(account.name)}</h2><p>${accountRole(account)}</p><button class="btn wide" data-action="sign-out">Sign out</button>`);return;}
 if(sessionAction==='workspace-home'){render();return;}
 const action=button.dataset.action,o=state.orders.find(o=>o.id===button.dataset.id);if(handleStoreAction(action,button,o)||handleFieldAction(action,button,o)||handleDispatchAction(action,button,o))return;switch(action){
 case 'store-orders':tab='orders';render();break;
 case 'store-replenish':tab='replenishment';render();break;
-case 'offline':if(!window.relayDevTools)break;state.offline=!state.offline;if(!state.offline){const n=state.pending.length;state.pending=[];record(`${n} queued updates synced in demo workspace`);toast(`${n} updates synced. Your team is up to date.`)}else{save();toast('Offline simulation enabled. Progress will save on this device.')}render();break;
-case 'contact':openDialog(`<h2>Contact ${o.store}</h2><p>Store receiving desk<br>Ask for the duty manager and quote ${o.id}.</p><div class="notice">Demo contact: +94 11 234 5678. This is sample data; no call is placed by the prototype.</div>${dialogFooter()}`);break;
+case 'offline':if(!window.relayDevTools)break;state.offline=!state.offline;if(!state.offline){const n=state.pending.length;state.pending=[];record(`${n} queued updates synced in workspace`);toast(`${n} updates synced. Your team is up to date.`)}else{save();toast('Offline simulation enabled. Progress will save on this device.')}render();break;
+case 'contact':openDialog(`<h2>Contact ${o.store}</h2><p>Store receiving desk<br>Ask for the duty manager and quote ${o.id}.</p><div class="notice">Sample contact: +94 11 234 5678. This is sample data; no call is placed by the prototype.</div>${dialogFooter()}`);break;
 case 'activity':openDialog(`<div class="eyebrow">Shared activity</div><h2>Every handoff, connected.</h2>${state.history.length?`<div class="activity-list">${state.history.map(h=>`<div class="history-entry"><small>${h.time}</small><p style="margin:5px 0 0;color:var(--text)">${esc(h.message)}</p></div>`).join('')}</div>`:'<p>Your order, loading and delivery updates will appear here.</p>'}${dialogFooter()}`);break;
 }});
 window.addEventListener('hashchange',()=>{

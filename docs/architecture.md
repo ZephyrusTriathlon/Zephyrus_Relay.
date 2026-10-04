@@ -34,6 +34,6 @@ No optimization solver, live traffic feed, inventory integration, automatic Driv
 
 The server catalogue owns product codes, carton specifications and ambient/chilled/frozen requirements. Order context supplies the catalogue to the Store UI; forged specifications and temperature mismatches are rejected.
 
-Explicit judge mode configures the production startup ordering clock inside supplied calendar coverage and discloses it through authenticated scenario/context endpoints and a UI banner. It refuses databases with non-demo accounts. Session expiry, security settings and delivery timestamps use real time. Real operations use RELAY_JUDGE_MODE=false.
+Explicit judge mode configures the production startup ordering clock inside supplied calendar coverage and discloses it through authenticated scenario/context endpoints and a small note beside Store ordering. It refuses databases with non-demo accounts. Session expiry, security settings and delivery timestamps use real time. Real operations use RELAY_JUDGE_MODE=false.
 
 Planning exposes calendar context and applies a documented conservative 20% monsoon travel allowance. Demand event flags inform Dispatcher review; actual orders drive capacity. Deferred carry-forward, draft edits, allocation and release share the planning advisory lock. Carry-forward requires a later operating date and current order version; it preserves the requested date and audit history. Release requires an active Driver on every draft.

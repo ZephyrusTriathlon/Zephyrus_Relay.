@@ -11,8 +11,14 @@ export function makeDemo(network) {
   const deliveryDate = new Date(`${DEMO_DATE}T00:00:00Z`);
   const createdAt = new Date('2025-01-01T10:00:00+05:30');
   const source = RecordSource.DEMO;
+  const displayNames = {
+    [Roles.STORE_MANAGER]: 'Nimasha Perera',
+    [Roles.DISPATCHER]: 'Dinuka Fernando',
+    [Roles.LOADER]: 'Kasun Silva',
+    [Roles.DRIVER]: 'Amal Perera'
+  };
   const users = Object.entries(Roles).map(([name, role]) => ({
-    id: `demo-user-${name.toLowerCase()}`, email: `${name.toLowerCase()}@relay.demo`, displayName: `Judge ${name.toLowerCase().replaceAll('_', ' ')}`,
+    id: `demo-user-${name.toLowerCase()}`, email: `${name.toLowerCase()}@relay.demo`, displayName: displayNames[role],
     role, source, ...(role === Roles.STORE_MANAGER ? { outletId: primary.id } : {}), createdAt, updatedAt: createdAt
   }));
   const specs = [

@@ -78,9 +78,9 @@ test('fresh supplied judge scenario on production-default built UI',{timeout:240
     await login('driver');await select();await wait('!!navigator.serviceWorker.controller && driverOffline.details().mode!=="SYNCING"');
     await b.click('[data-action="start-route"]');await wait('!fieldBusy && selectedFieldTrip()?.status==="IN_PROGRESS"');await layouts('driver');
     await b.click('[data-action="arrived"]');await wait('!fieldBusy && nextDelivery()?.arrived');
-    await pod('Judge OUT004');await pod('Judge OUT004');
+    await pod('Sahan Jayawardena');await pod('Sahan Jayawardena');
     await b.send('Network.enable');await b.send('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:0,uploadThroughput:0});await wait('!navigator.onLine');await reload();
-    await b.click('[data-action="arrived"]');await wait('!fieldBusy && nextDelivery()?.arrived');await pod('Judge OUT005');
+    await b.click('[data-action="arrived"]');await wait('!fieldBusy && nextDelivery()?.arrived');await pod('Tharushi Silva');
     assert.equal(await db.proofOfDelivery.count(),2);assert.ok(await b.run('driverOffline.details().pending')>=2);
     await reload();assert.ok(await b.run('driverOffline.details().pending')>=2);await b.screenshot('stage10/judge/driver-offline');
     await b.send('Network.emulateNetworkConditions',{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1});

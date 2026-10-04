@@ -18,7 +18,7 @@ export async function configuredOrderClock({ env = process.env, database = getDa
     if (!day || day.source !== 'SUPPLIED' || !next) throw new Error('Judge clock requires supplied calendar coverage and an upcoming operating day');
     if (realUsers) throw new Error('Judge mode is restricted to an isolated database containing only demo accounts');
     const clock = () => new Date(instant.getTime());
-    clock.scenario = {mode:'judge',businessDate:window.today,orderingTime:timestamp,message:`Judge scenario: business date ${window.today}, fixed Colombo ordering time. Delivery events use actual time.`};
+    clock.scenario = {mode:'judge',businessDate:window.today,orderingTime:timestamp,message:`Ordering date: ${window.today} (Asia/Colombo). Delivery events use actual time.`};
     return clock;
   }
   if (env.RELAY_DEMO_ORDER_NOW === undefined) return undefined;

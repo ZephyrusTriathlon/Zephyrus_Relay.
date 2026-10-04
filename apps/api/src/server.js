@@ -12,7 +12,7 @@ if (config.RELAY_DEV_READS === 'true' && process.env.NODE_ENV === 'production') 
 let orderClock;
 try { orderClock = await configuredOrderClock(); }
 catch (error) { await closeDatabase(); throw error; }
-if (orderClock) console.warn(`Demo ordering clock fixed at ${orderClock().toISOString()} (Asia/Colombo business timezone)`);
+if (orderClock) console.warn(`Ordering clock fixed at ${orderClock().toISOString()} (Asia/Colombo business timezone)`);
 const app = createApp({ devReads: config.RELAY_DEV_READS === 'true', orderClock });
 if (process.env.TRUST_PROXY === 'true') app.set('trust proxy', 1);
 const server = app.listen(config.PORT, config.HOST, () => {

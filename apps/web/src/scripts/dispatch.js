@@ -59,6 +59,32 @@ async function runServerPlanning(action) {
 function planningReasons(violations) {
   return violations.map(v=>`<li>${esc(v.message)}${v.orderId?` · ${esc(planningDay?.orders.find(o=>o.id===v.orderId)?.orderNumber||'Selected order')}`:''}</li>`).join('');
 }
+function planningCalendarNotice(day) {
+  const c=day.calendar;if(!c)return '';
+  const demand=[c.isPayday?'Payday':null,c.festival?`${c.festival} (ramp ${Number(c.festivalRamp)})`:null,c.isWeekend?'Weekend':null].filter(Boolean);
+  return `<p class="notice" role="status">Calendar: ${demand.length?esc(demand.join(' · ')):'No flagged demand event'}. ${c.monsoon?'Monsoon: travel estimates include a conservative 20% allowance.':'Standard supplied free-flow travel estimates.'} Demand flags support Dispatcher review; actual order quantities determine capacity.</p>`;
+}
+function openReschedule(id) {
+  const order=planningDay?.orders.find(o=>o.id===id);
+  if(!order||order.status!=='DEFERRED'||planningBusy)return;
+  const next=new Date(order.deliveryDate);next.setUTCDate(next.getUTCDate()+1);
+  const suggested=order.deferrals.at(-1)?.nextEligibleDate?.slice(0,10)||next.toISOString().slice(0,10);
+  openDialog(`<h2>Move ${esc(order.orderNumber)} to a later run</h2><p>Original request and deferral history will be retained. The destination run must validate capacity and access again.</p><label class="form-label" for="reschedule-date">Next operating date</label><input class="input" id="reschedule-date" type="date" min="${next.toISOString().slice(0,10)}" value="${esc(suggested)}"><label class="form-label" for="reschedule-reason">Reason</label><select class="input" id="reschedule-reason">${['CAPACITY','TEMPERATURE','ACCESS','DELIVERY_WINDOW','FUEL','TIME_BUDGET','OTHER'].map(r=>`<option value="${r}">${esc(operationalLabel(r))}</option>`).join('')}</select><label class="form-label" for="reschedule-note">Explanation (required)</label><textarea class="input" id="reschedule-note" minlength="5" maxlength="500" required></textarea><p id="reschedule-error" class="form-error" role="alert"></p><div class="dialog-actions"><button class="btn" data-action="close">Cancel</button><button class="btn primary" data-action="planning-save-reschedule" data-id="${esc(order.id)}" data-version="${esc(order.updatedAt)}">Move order</button></div>`);
+}
+async function saveReschedule(button) {
+  if(planningBusy)return;
+  const owner=currentAccount()?.id,generation=planningGeneration;
+  const input={orderId:button.dataset.id,version:button.dataset.version,date:document.querySelector('#reschedule-date').value,reason:document.querySelector('#reschedule-reason').value,explanation:document.querySelector('#reschedule-note').value.trim()};
+  if(!input.date||input.explanation.length<5){document.querySelector('#reschedule-error').textContent='Choose a date and explain the decision (at least 5 characters).';return;}
+  planningBusy=true;button.disabled=true;
+  try {
+    const result=await planningRequest('/reschedule',input);
+    if(owner!==currentAccount()?.id||generation!==planningGeneration)return;
+    closeDialog();planningDate=result.date;planningEdit=null;planningOrderIds=[];planningBusy=false;
+    await runServerPlanning('planning-load');toast('Order moved. Review and allocate the destination run.');
+  }catch(error){if(generation===planningGeneration){const message=document.querySelector('#reschedule-error');if(message)message.textContent=error.message;}}
+  finally{if(generation===planningGeneration){planningBusy=false;button.disabled=false;}}
+}
 const planningClock=minutes=>Number.isFinite(Number(minutes))?`${String(Math.floor(Number(minutes)/60)).padStart(2,'0')}:${String(Number(minutes)%60).padStart(2,'0')}`:'Not scheduled';
 const planningMinute=time=>/^\d{2}:\d{2}$/.test(time)?Number(time.slice(0,2))*60+Number(time.slice(3)):NaN;
 let planningTripId='';
@@ -68,8 +94,10 @@ function serverPlanningView() {
   const drafts=day?.trips.filter(t=>t.status==='DRAFT')||[],queue=day?.orders.filter(o=>!o.allocation)||[];
   const issues=day?.trips.flatMap(t=>t.stops.flatMap(s=>s.allocations.flatMap(a=>[...(a.loadingIssues||[]),...(a.exceptions||[])]))).filter(i=>i.status==='OPEN')||[];
   const status=trip?operationalLabel(trip.status):'Awaiting allocation';
-  return `${heading('Dispatcher · '+esc(planningDate||'Select a planning date'),'Next-day dispatch','Review the confirmed queue, then release the plan.',`${day?`<button class="btn ${drafts.length?'':'primary'}" data-action="planning-allocate" ${disabled}>Allocate orders</button><button class="btn primary" data-action="planning-release" ${planningBusy||planningEdit||!drafts.length?'disabled':''}>${icon('check')} Confirm plan</button>`:''}`)}
+  return `${heading('Dispatcher · '+esc(planningDate||'Select a planning date'),'Next-day dispatch','Review the confirmed queue, then release the plan.',`${day?`<button class="btn ${drafts.length?'':'primary'}" data-action="planning-allocate" ${disabled}>Allocate orders</button><button class="btn primary" data-action="planning-release" ${planningBusy||planningEdit||!drafts.length||drafts.some(t=>!day.drivers.some(d=>d.id===t.driverId))?'disabled':''}>${icon('check')} Confirm plan</button>`:''}`)}
     <div class="planning-date-controls"><label for="planning-date">Planning date · Colombo<input class="input" id="planning-date" type="date" value="${esc(planningDate)}" ${disabled}></label><button class="btn" data-action="planning-load" ${planningBusy||!planningDate?'disabled':''}>${planningBusy?'Loading…':'Load day'}</button>${window.relayDevTools?'<button class="btn" data-action="planning-prototype">Historical simulation (development)</button>':''}</div>
+    ${day?planningCalendarNotice(day):''}
+    ${drafts.some(t=>!day.drivers.some(d=>d.id===t.driverId))?'<p class="notice" role="status">Assign an active Driver to every draft in Review / adjust draft before confirming the plan.</p>':''}
     ${planningBusy?'<p class="helper" role="status">Updating planning…</p>':''}${planningError?`<div class="notice" role="alert">${esc(planningError)} <button class="btn" data-action="planning-load" ${disabled}>Retry</button></div>`:''}
     ${result?.kind==='release'?`<p class="notice green" role="status">Plan released · ${result.trips.length} trips ready for loading.</p>`:result?.kind==='allocation'?`<p class="notice green" id="planning-result" role="status">${result.trips.length} draft trips saved · ${result.deferrals.length} orders deferred. Review assignments before release.</p>`:''}
     ${day?`<section class="dispatch-pulse" aria-label="Dispatch overview"><div><span>Awaiting decision</span><strong>${queue.length}<small>${queue.filter(o=>o.status==='DEFERRED').length} deferred</small></strong></div><div><span>Planned trips</span><strong>${day.trips.length}<small>${drafts.length} drafts</small></strong></div><div><span>Delivered orders</span><strong>${day.orders.filter(o=>['DELIVERED','RECEIVED'].includes(o.status)).length}<small>of ${day.orders.length}</small></strong></div><div><span>Needs attention</span><strong class="${issues.length?'amber':'green'}">${issues.length}<small>open issues</small></strong></div></section>
@@ -89,7 +117,7 @@ function serverPlanningView() {
 function planningQueueCards(disabled) {
   const day=planningDay,orders=day.orders.filter(o=>[o.orderNumber,o.outlet.id,o.status].some(v=>v.toLowerCase().includes(planningSearch.toLowerCase())));
   if(!orders.length)return '<div class="empty"><h3>No matching orders</h3><p>Try another order or outlet.</p></div>';
-  return orders.map(o=>{const selectable=!o.allocation&&['CONFIRMED','DEFERRED'].includes(o.status),cartons=o.items.reduce((n,i)=>n+i.cartons,0),weight=o.items.reduce((n,i)=>n+i.cartons*Number(i.unitWeightKg),0),volume=o.items.reduce((n,i)=>n+i.cartons*Number(i.unitVolumeM3),0);return `<article class="order-card ${planningOrderIds.includes(o.id)?'selected':''}"><div class="row between"><small>${esc(o.orderNumber)}</small>${badge(operationalLabel(o.status))}</div><h3 class="order-title">${esc(o.outlet.brand)} · ${esc(o.outlet.id)}</h3><div class="order-meta"><span>${icon('clock')}${esc(o.windowOpenTime)}–${esc(o.windowCloseTime)}</span><span>${cartons} cartons · ${weight.toFixed(1)} kg · ${volume.toFixed(2)} m³</span><span>${esc(operationalLabel(o.temperatureRequirement))} · ${esc(operationalLabel(o.outlet.parkingConstraint))}</span></div>${o.allocation?`<p class="queue-waiting">${esc(day.trips.find(t=>t.id===o.allocation.tripId)?.tripNumber||'Scheduled trip')}</p>`:''}${o.deferrals.length?`<details class="fit-note"><summary>${o.deferrals.length} deferral${o.deferrals.length===1?'':'s'}${o.deferrals.length>1?' · Repeated deferral':''}</summary>${[...o.deferrals].reverse().map(d=>`<p><b>${esc(operationalLabel(d.reason))}</b><br>${esc(deferralExplanation(d))}<br>${esc(d.impact)}<br>${d.resolvedAt?'Resolved':'Next review: '+esc(d.nextEligibleDate?.slice(0,10)||'Pending')}</p>`).join('')}</details>`:''}<div class="order-bottom">${selectable?`<label class="check-row"><input type="checkbox" data-planning-order="${esc(o.id)}" aria-label="Validate ${esc(o.orderNumber)}" ${planningOrderIds.includes(o.id)?'checked':''} ${disabled}> Validate</label>`:''}<button class="mini-btn" data-action="planning-order-detail" data-id="${esc(o.id)}">Details</button></div></article>`;}).join('');
+  return orders.map(o=>{const selectable=!o.allocation&&['CONFIRMED','DEFERRED'].includes(o.status),cartons=o.items.reduce((n,i)=>n+i.cartons,0),weight=o.items.reduce((n,i)=>n+i.cartons*Number(i.unitWeightKg),0),volume=o.items.reduce((n,i)=>n+i.cartons*Number(i.unitVolumeM3),0);return `<article class="order-card ${planningOrderIds.includes(o.id)?'selected':''}"><div class="row between"><small>${esc(o.orderNumber)}</small>${badge(operationalLabel(o.status))}</div><h3 class="order-title">${esc(o.outlet.brand)} · ${esc(o.outlet.id)}</h3><div class="order-meta"><span>${icon('clock')}${esc(o.windowOpenTime)}–${esc(o.windowCloseTime)}</span><span>${cartons} cartons · ${weight.toFixed(1)} kg · ${volume.toFixed(2)} m³</span><span>${esc(operationalLabel(o.temperatureRequirement))} · ${esc(operationalLabel(o.outlet.parkingConstraint))}</span></div>${o.allocation?`<p class="queue-waiting">${esc(day.trips.find(t=>t.id===o.allocation.tripId)?.tripNumber||'Scheduled trip')}</p>`:''}${o.deferrals.length?`<details class="fit-note"><summary>${o.deferrals.length} deferral${o.deferrals.length===1?'':'s'}${o.deferrals.length>1?' · Repeated deferral':''}</summary>${[...o.deferrals].reverse().map(d=>`<p><b>${esc(operationalLabel(d.reason))}</b><br>${esc(deferralExplanation(d))}<br>${esc(d.impact)}<br>${d.resolvedAt?'Resolved':'Next review: '+esc(d.nextEligibleDate?.slice(0,10)||'Pending')}</p>`).join('')}</details>`:''}<div class="order-bottom">${selectable?`<label class="check-row"><input type="checkbox" data-planning-order="${esc(o.id)}" aria-label="Validate ${esc(o.orderNumber)}" ${planningOrderIds.includes(o.id)?'checked':''} ${disabled}> Validate</label>`:''}${o.status==='DEFERRED'&&!o.allocation?`<button class="mini-btn" data-action="planning-reschedule" data-id="${esc(o.id)}" ${disabled}>Move to later run</button>`:''}<button class="mini-btn" data-action="planning-order-detail" data-id="${esc(o.id)}">Details</button></div></article>`;}).join('');
 }
 function planningTripCard(t,disabled) {
   const m=t.planningContext?.metrics,allocations=t.stops.flatMap(s=>s.allocations),cartons=allocations.reduce((n,a)=>n+a.order.items.reduce((sum,i)=>sum+i.cartons,0),0),edit=planningEdit?.tripId===t.id;
@@ -284,6 +312,8 @@ function handleDispatchAction(action,button,o) {
     const index=Number(button.dataset.index),next=index+Number(button.dataset.direction),ids=planningEdit.orderIds;
     if(next>=0&&next<ids.length){[ids[index],ids[next]]=[ids[next],ids[index]];planningResult=null;render();}return true;
   }
+  if(action==='planning-reschedule'){openReschedule(button.dataset.id);return true;}
+  if(action==='planning-save-reschedule'){saveReschedule(button);return true;}
   if(action==='planning-review'){
     const t=planningDay?.trips.find(t=>t.id===button.dataset.trip);
     if(t?.status==='DRAFT'&&!planningBusy){planningTripId=t.id;planningEdit={tripId:t.id,version:t.updatedAt,vehicleId:t.vehicleId,driverId:t.driverId,departureMinute:savedDepartureMinute(t),orderIds:t.stops.flatMap(s=>s.allocations.map(a=>a.orderId))};render();}return true;

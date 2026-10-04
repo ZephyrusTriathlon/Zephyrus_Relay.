@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
-export const PLANNING_POLICY = Object.freeze({ version: 'relay-district-v1', departureMinute: 240,
+export const PLANNING_POLICY = Object.freeze({ version: 'relay-district-v2', departureMinute: 240,
   distance: 'Depot to first district; same-district inter-stop legs; cross-district legs via home depot; last district back to depot.',
-  time: 'Supplied free-flow minutes plus supplied service allowances and waiting. Estimates, not traffic forecasts; return travel reserves the vehicle.' });
+  time: 'Supplied free-flow minutes, increased by 20% on calendar monsoon days, plus service and waiting. The 20% is a conservative planning assumption, not a fitted forecast. Return travel reserves the vehicle.' });
 const minute = value => /^([01]\d|2[0-3]):[0-5]\d$/.test(value) ? Number(value.slice(0,2))*60+Number(value.slice(3)) : NaN;
 const positive = z.coerce.number().finite().positive();
 const measurement = positive.refine(n=>Number.isSafeInteger(Math.round(n*1000))&&Math.abs(n*1000-Math.round(n*1000))<0.000001,'At most three decimal places');
@@ -10,7 +10,7 @@ const clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 const outletSchema = z.object({ id:z.string(), depotId:z.string(), district:z.string(), brand:z.enum(['FRESH','STYLE','TECH']),
   dockType:z.enum(['STREET','REAR_DOCK','MALL_BAY']), parkingConstraint:z.enum(['NORMAL','VAN_ONLY','MALL_DOCK']),
   windowOpenTime:clock, windowCloseTime:clock, mallWindow:z.string().nullable() });
-const orderSchema = z.object({ id:z.string(), outlet:outletSchema, temperatureRequirement:z.enum(['AMBIENT','CHILLED']),
+const orderSchema = z.object({ id:z.string(), outlet:outletSchema, temperatureRequirement:z.enum(['AMBIENT','CHILLED','FROZEN']),
   windowOpenTime:clock, windowCloseTime:clock, items:z.array(z.object({cartons:positive.int().safe(),unitWeightKg:measurement,unitVolumeM3:measurement})).min(1) });
 const vehicleSchema = z.object({id:z.string(),depotId:z.string(),type:z.enum(['VAN','TRUCK']),temperature:z.enum(['AMBIENT','REEFER']),
   weightCapacityKg:measurement,volumeCapacityM3:measurement,kmPerLitre:positive,weeklyFuelQuotaL:positive});
@@ -31,7 +31,9 @@ export function weekBounds(date) {
 }
 
 // All inputs are explicit; no database, environment, browser or wall-clock reads.
-export function validateTrip({date,vehicle,orders,departureMinute=PLANNING_POLICY.departureMinute,existingTrips=[],travel=[],service=[],id}={}) {
+export function validateTrip({date,vehicle,orders,departureMinute=PLANNING_POLICY.departureMinute,existingTrips=[],travel=[],service=[],calendar,id}={}) {
+  const travelFactor=calendar?.monsoon ? 1.2 : 1;
+  const travelMinutes=value=>Math.ceil(value*travelFactor);
   const violations=[];
   const fail=(code,message,context={})=>violations.push({code,message,...context});
   if (!z.iso.date().safeParse(date).success || !vehicleSchema.safeParse(vehicle).success || !Array.isArray(orders) || !orders.length ||
@@ -44,7 +46,7 @@ export function validateTrip({date,vehicle,orders,departureMinute=PLANNING_POLIC
   for(const order of orders){
     const context={orderId:order.id,outletId:order.outlet.id};
     if(order.outlet.depotId!==vehicle.depotId)fail('DEPOT_MISMATCH','Vehicle and outlet must share a home depot.',context);
-    if(order.temperatureRequirement==='CHILLED'&&vehicle.temperature!=='REEFER')fail('REFRIGERATION_REQUIRED','Chilled orders require a reefer.',context);
+    if(['CHILLED','FROZEN'].includes(order.temperatureRequirement)&&vehicle.temperature!=='REEFER')fail('REFRIGERATION_REQUIRED','Chilled and frozen orders require a reefer.',context);
     if(order.outlet.parkingConstraint==='VAN_ONLY'&&vehicle.type!=='VAN')fail('VAN_ACCESS_REQUIRED','This outlet requires a van.',context);
   }
   if(load.weightMilli>milli(vehicle.weightCapacityKg))fail('CAPACITY_WEIGHT','Trip weight exceeds vehicle capacity.',{actual:load.weightMilli/1000,limit:Number(vehicle.weightCapacityKg)});
@@ -61,8 +63,8 @@ export function validateTrip({date,vehicle,orders,departureMinute=PLANNING_POLIC
     if(!leg || !['outboundKm','outboundMinutes','interStopKm','interStopMinutes'].every(key=>Number.isFinite(leg[key])&&leg[key]>0) || !Number.isFinite(allowance)||allowance<=0) {
       fail('ROUTE_DATA_MISSING','Supplied travel or service data is unavailable.',{outletId:outlet.id});continue;
     }
-    if(previous?.district===outlet.district){distanceKm+=leg.interStopKm;current+=leg.interStopMinutes;}
-    else {distanceKm+=(previous?.outboundKm ?? 0)+leg.outboundKm;current+=(previous?.outboundMinutes ?? 0)+leg.outboundMinutes;}
+    if(previous?.district===outlet.district){distanceKm+=leg.interStopKm;current+=travelMinutes(leg.interStopMinutes);}
+    else {distanceKm+=(previous?.outboundKm ?? 0)+leg.outboundKm;current+=travelMinutes(previous?.outboundMinutes ?? 0)+travelMinutes(leg.outboundMinutes);}
     const windows=group.map(deliveryWindow);
     current=Math.max(current,...windows.map(w=>w.open));
     const arrivalMinute=current;
@@ -76,7 +78,7 @@ export function validateTrip({date,vehicle,orders,departureMinute=PLANNING_POLIC
     stops.push({outletId:outlet.id,orderIds:group.map(o=>o.id),arrivalMinute,serviceMinutes:allowance});
     current+=allowance;previous={...leg,district:outlet.district};
   }
-  distanceKm+=previous?.outboundKm ?? 0;current+=previous?.outboundMinutes ?? 0;
+  distanceKm+=previous?.outboundKm ?? 0;current+=travelMinutes(previous?.outboundMinutes ?? 0);
   const fuelLitres=distanceKm/Number(vehicle.kmPerLitre);
   const week=weekBounds(date);
   const other=existingTrips.filter(t=>t.vehicleId===vehicle.id&&t.status!=='CANCELLED'&&(!id||t.id!==id));
@@ -89,19 +91,19 @@ export function validateTrip({date,vehicle,orders,departureMinute=PLANNING_POLIC
   if(daily.length>=2)fail('DAILY_TRIP_LIMIT','A vehicle may execute at most two trips per business date.',{actual:daily.length+1,limit:2});
   if(daily.some(t=>departureMinute<t.returnMinute&&current>t.departureMinute))fail('TRIP_OVERLAP','Vehicle has not returned from another trip.');
   if(!Number.isFinite(current)||current>=1440)fail('DELIVERY_WINDOW','Route must return within the planning business date.');
-  return {feasible:violations.length===0,violations,metrics:{weightKg:load.weightMilli/1000,volumeM3:load.volumeMilli/1000,distanceKm,fuelLitres,weeklyFuelLitres,departureMinute,returnMinute:current,stops,policy:PLANNING_POLICY.version}};
+  return {feasible:violations.length===0,violations,metrics:{weightKg:load.weightMilli/1000,volumeM3:load.volumeMilli/1000,distanceKm,fuelLitres,weeklyFuelLitres,departureMinute,returnMinute:current,stops,travelFactor,policy:PLANNING_POLICY.version}};
 }
 
 export function prioritizeOrders(orders,date) {
   return orders.map(order=>{
     const w=deliveryWindow(order),load=orderLoad(order);
     const days=order.lastServedDate?Math.max(0,Math.floor((new Date(date)-new Date(order.lastServedDate))/86400000)):3650;
-    const signals=[order.deferrals?.length ?? 0,days,Number(order.temperatureRequirement==='CHILLED'),Number(order.outlet.parkingConstraint==='VAN_ONLY'),-(w.close-w.open),Number(order.outlet.brand==='FRESH'),load.weightMilli,load.volumeMilli];
+    const signals=[order.deferrals?.length ?? 0,days,Number(['CHILLED','FROZEN'].includes(order.temperatureRequirement)),Number(order.outlet.parkingConstraint==='VAN_ONLY'),-(w.close-w.open),Number(order.outlet.brand==='FRESH'),load.weightMilli,load.volumeMilli];
     return {order,signals};
   }).sort((a,b)=>{for(let i=0;i<a.signals.length;i++){const delta=b.signals[i]-a.signals[i];if(delta)return delta;}return a.order.id<b.order.id?-1:a.order.id>b.order.id?1:0;});
 }
 
-export function allocateOrders({date,orders,vehicles,existingTrips=[],travel,service}) {
+export function allocateOrders({date,orders,vehicles,existingTrips=[],travel,service,calendar}) {
   const trips=[],decisions=[],deferrals=[];
   const fleet=[...vehicles].sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0);
   for(const {order,signals} of prioritizeOrders(orders,date)) {
@@ -118,7 +120,7 @@ export function allocateOrders({date,orders,vehicles,existingTrips=[],travel,ser
       while(sequences.has(sequence))sequence++;
       const next={id:`plan-${vehicle.id}-${sequence}`,vehicle,sequence,orders:[],departureMinute:Math.max(PLANNING_POLICY.departureMinute,...used.map(t=>t.returnMinute ?? PLANNING_POLICY.departureMinute))};
       for(const target of [...own,next]) {
-        const input={date,vehicle,orders:[...target.orders,order],departureMinute:target.departureMinute,existingTrips:baselines(),travel,service,id:target.id};
+        const input={date,vehicle,orders:[...target.orders,order],departureMinute:target.departureMinute,existingTrips:baselines(),travel,service,calendar,id:target.id};
         const validation=validateTrip(input);
         if(!validation.feasible){rejections.push({vehicleId:vehicle.id,tripId:target.id,violations:validation.violations});continue;}
         const score=[target.orders.length?0:1,validation.metrics.fuelLitres-(target.validation?.metrics.fuelLitres ?? 0),1-validation.metrics.weightKg/Number(vehicle.weightCapacityKg)];
@@ -133,6 +135,6 @@ export function allocateOrders({date,orders,vehicles,existingTrips=[],travel,ser
     decisions.push({orderId:order.id,tripId:winner.target.id,vehicleId:winner.target.vehicle.id,priority:signals,score:winner.score,explanation:'Selected the feasible candidate with the best lexicographic score: existing trip, incremental fuel, then weight utilization and stable ID.',rejections});
   }
   // Independent final pass includes all other new reservations before persistence.
-  for(const trip of trips){trip.validation=validateTrip({date,vehicle:trip.vehicle,orders:trip.orders,departureMinute:trip.departureMinute,id:trip.id,existingTrips:[...existingTrips,...trips.map(t=>({id:t.id,vehicleId:t.vehicle.id,date,...t.validation.metrics}))],travel,service});if(!trip.validation.feasible)throw new Error('Allocator produced an invalid plan');}
+  for(const trip of trips){trip.validation=validateTrip({date,vehicle:trip.vehicle,orders:trip.orders,departureMinute:trip.departureMinute,id:trip.id,existingTrips:[...existingTrips,...trips.map(t=>({id:t.id,vehicleId:t.vehicle.id,date,...t.validation.metrics}))],travel,service,calendar});if(!trip.validation.feasible)throw new Error('Allocator produced an invalid plan');}
   return {date,policy:PLANNING_POLICY,trips,decisions,deferrals};
 }

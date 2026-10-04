@@ -1,3 +1,5 @@
+> Historical report: subsequent submission fixes and current verification are recorded in [submission readiness](submission-readiness.md). In particular, supplied data, production judge ordering, deferred carry-forward, frozen goods and release readiness have changed.
+
 # Stage 10 — Designathon fidelity and product audit
 
 Executed 4 October 2026 against the revised fidelity-first brief. This report supersedes the Stage 9 final report for current behavior. The tracked worktree was clean when this pass began. The supplied data, root environment file, existing operational database, schema, migrations and historical Designathon submission were preserved. No framework migration, public deployment, commit or push was performed.

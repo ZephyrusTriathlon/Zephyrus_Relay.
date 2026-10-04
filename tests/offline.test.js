@@ -13,7 +13,7 @@ test('Stage 8 real network offline, durable reconciliation and account isolation
   const app=createApp({database:()=>db});let swRevision=1,syncRequests=0;
   const server=require('node:http').createServer((req,res)=>{
     if(req.url==='/api/sync')syncRequests++;
-    if(req.url==='/sw.js'){res.setHeader('Content-Type','text/javascript');res.setHeader('Cache-Control','no-cache');res.end(readFileSync('apps/web/dist/sw.js','utf8')+'\n// test update '+swRevision);}
+    if(req.url==='/sw.js'){res.setHeader('Content-Type','text/javascript');res.setHeader('Cache-Control','no-cache');res.end(readFileSync(require('node:path').join(process.env.RELAY_WEB_ROOT||'apps/web/dist','sw.js'),'utf8')+'\n// test update '+swRevision);}
     else app(req,res);
   }).listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
   const base=`http://127.0.0.1:${server.address().port}`;

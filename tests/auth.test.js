@@ -96,7 +96,11 @@ test('PostgreSQL authentication, persistence, cookies, RBAC and safe identity', 
   });
   await t.test('production requires a secret and HTTPS cookies',async()=>{
     assert.throws(()=>createApp({production:true,sessionSecret:''}),/SESSION_SECRET/);
-    instance=await start({production:true});instance.app.set('trust proxy',1);
+    const previousSecure=process.env.SESSION_COOKIE_SECURE;
+    delete process.env.SESSION_COOKIE_SECURE;
+    try{instance=await start({production:true});}
+    finally{if(previousSecure!==undefined)process.env.SESSION_COOKIE_SECURE=previousSecure;}
+    instance.app.set('trust proxy',1);
     const response=await request('/auth/login',null,{identifier:'driver',password:'RelayDemo!26'},{'x-forwarded-proto':'https'});
     assert.equal(response.status,200);assert.match(response.headers.get('set-cookie'),/; Secure/);
     await request('/auth/logout',response.headers.get('set-cookie').split(';')[0],{}, {'x-forwarded-proto':'https'});

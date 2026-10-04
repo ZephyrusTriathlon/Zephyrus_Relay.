@@ -1,0 +1,2 @@
+# Preserve supplied reference bytes and their SHA-256 manifest across platforms.
+prisma/judge-data/**/*.csv -text

@@ -11,6 +11,8 @@ test('hard constraint matrix, exact boundaries and compound failures',async t=>{
   const cases=[
     ['chilled needs reefer',x=>{x.orders[0].temperatureRequirement='CHILLED';x.vehicle.temperature='AMBIENT';},['REFRIGERATION_REQUIRED']],
     ['chilled with reefer',x=>{x.orders[0].temperatureRequirement='CHILLED';},[]],
+    ['frozen needs reefer',x=>{x.orders[0].temperatureRequirement='FROZEN';x.vehicle.temperature='AMBIENT';},['REFRIGERATION_REQUIRED']],
+    ['frozen with reefer',x=>{x.orders[0].temperatureRequirement='FROZEN';},[]],
     ['ambient with ambient',x=>{x.vehicle.temperature='AMBIENT';},[]],
     ['van-only rejects truck',x=>{x.orders[0].outlet.parkingConstraint='VAN_ONLY';x.vehicle.type='TRUCK';},['VAN_ACCESS_REQUIRED']],
     ['van-only accepts van',x=>{x.orders[0].outlet.parkingConstraint='VAN_ONLY';},[]],

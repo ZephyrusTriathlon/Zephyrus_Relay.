@@ -9,8 +9,10 @@ test('new Store order completes the production UI handoffs, issue recovery, offl
   const {createDatabase}=await import('../apps/api/src/db.js');
   const db=createDatabase(),date='2024-09-04',deliveryDate=new Date(date+'T00:00:00Z');
   assert.equal(await db.order.count({where:{deliveryDate}}),0,'Dedicated unused fixture date required');
-  // Inject a historical clock only into this test app; supplied calendars stay intact.
-  const app=createApp({database:()=>db,production:true,sessionSecret:'product-workflow-test-secret-32-characters',orderClock:()=>new Date('2024-09-03T15:59:00+05:30')});
+  // Use the same explicit judge-clock configuration as ordinary production startup.
+  const {configuredOrderClock}=await import('../apps/api/src/order-clock.js');
+  const orderClock=await configuredOrderClock({database:()=>db,env:{NODE_ENV:'production',RELAY_JUDGE_MODE:'true',RELAY_JUDGE_ORDER_NOW:'2024-09-03T15:59:00+05:30'}});
+  const app=createApp({database:()=>db,production:true,sessionSecret:'product-workflow-test-secret-32-characters',orderClock});
   const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
   const b=await require('./cdp').connect({isolated:true});let orderId,tripId;
   t.after(async()=>{
@@ -32,9 +34,10 @@ test('new Store order completes the production UI handoffs, issue recovery, offl
   await b.send('Page.navigate',{url:`http://127.0.0.1:${server.address().port}`});await wait('identityReady');
   await login('store');await wait('!!storeData && !storeLoading');await b.viewport(390);
   assert.equal(await b.run('window.relayDevTools'),false);await b.input('#store-date',date,'change');
+  await b.input('#store-temperature','FROZEN','change');
   const product=await b.run('storeFilteredProducts()[0].i');await b.click(`[data-action="store-step"][data-product="${product}"][data-delta="1"]`);
   await b.click('[data-action="create-order"]');await b.click('[data-action="place-order"]');await wait('!!document.querySelector("[data-order-id]") && !storeSubmitting');
-  orderId=await b.run('document.querySelector("[data-order-id]").dataset.orderId');assert.equal((await db.order.findUniqueOrThrow({where:{id:orderId}})).status,'CONFIRMED');
+  orderId=await b.run('document.querySelector("[data-order-id]").dataset.orderId');assert.equal((await db.order.findUniqueOrThrow({where:{id:orderId}})).status,'CONFIRMED');assert.equal((await db.order.findUniqueOrThrow({where:{id:orderId}})).temperatureRequirement,'FROZEN');
   await b.click('.dialog-close');await b.run("state.history=[{message:'Private prototype residue',time:'10:00'}]");await b.click('[data-action="activity"]');assert.doesNotMatch(await b.run('document.querySelector("#main").innerText'),/Private prototype residue/);assert.match(await b.run('document.querySelector("#main").innerText'),/Confirmed/);await wait('!storeLoading');
   await b.send('Page.reload');await wait('!!storeData && !storeLoading');assert.ok(await b.run(`storeOwnOrders().some(o=>o.id===${JSON.stringify(orderId)})`));await logout();
   await b.viewport(1440);await login('dispatcher');await b.input('#planning-date',date,'change');await b.click('[data-action="planning-load"]');await wait('!!planningDay && !planningBusy');

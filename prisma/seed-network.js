@@ -23,8 +23,11 @@ export async function seedNetwork(db, { dataDir } = {}) {
     for (const [model, rows, key] of [['depot', network.depots, 'id'], ['outlet', network.outlets, 'id'], ['vehicle', network.vehicles, 'id'], ['calendarDay', network.calendar, 'date']]) {
       for (const record of rows) {
         const where = { [key]: record[key] };
-        const existing = await tx[model].findUnique({ where, select: { source: true } });
+        const existing = await tx[model].findUnique({ where });
         if (existing && existing.source !== RecordSource.SUPPLIED) throw new Error(`Seed refused to overwrite a non-supplied ${model} record`);
+        // Refuse to change references underneath existing operational work.
+        const decimalFields=new Set(['weightCapacityKg','volumeCapacityM3','kmPerLitre','weeklyFuelQuotaL','festivalRamp']);
+        if(existing&&Object.entries(record).some(([field,value])=>value instanceof Date ? +existing[field]!==+value : decimalFields.has(field) ? Number(existing[field])!==Number(value) : existing[field]!==value))throw new Error('Reference dataset differs from existing records. Use a fresh database; existing operations were not changed.');
         await tx[model].upsert({ where, create: record, update: record });
       }
     }
@@ -47,7 +50,7 @@ export async function seedNetwork(db, { dataDir } = {}) {
       await tx.user.updateMany({where:{id:user.id,source:RecordSource.DEMO,displayName:`Relay demo ${user.role.toLowerCase().replace('_',' ')}`},data:{displayName:user.displayName}});
     }
     for (const { item, ...order } of demo.orders) {
-      await createOnce('order', order);
+      await createOnce('order', {...order,requestedDeliveryDate:order.deliveryDate});
       await createOnce('orderItem', { ...item, orderId: order.id });
       await tx.order.updateMany({where:{id:order.id,source:RecordSource.DEMO,orderNumber:order.orderNumber.replace('ORD-','DEMO-')},data:{orderNumber:order.orderNumber}});
       await tx.orderItem.updateMany({where:{id:item.id,description:{in:['Relay demo chilled cartons','Relay demo ambient cartons']}},data:{description:item.description,productCode:item.productCode}});

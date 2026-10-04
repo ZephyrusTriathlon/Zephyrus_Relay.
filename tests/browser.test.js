@@ -17,8 +17,9 @@ test('Relay: connected order, planning constraints, field exceptions and respons
   await new Promise(resolve=>api.once('listening',resolve));
   const previousUrl=process.env.RELAY_URL, previousDevTools=process.env.VITE_ENABLE_DEV_TOOLS;
   process.env.VITE_ENABLE_DEV_TOOLS='true';
-  const web=await createServer({configFile:require('node:path').resolve('apps/web/vite.config.js'),server:{middlewareMode:true,hmr:false,proxy:{'/api':{target:`http://127.0.0.1:${api.address().port}`}}}});
-  const webHttp=require('node:http').createServer(web.middlewares).listen(0,'127.0.0.1');
+  const webHttp=require('node:http').createServer((req,res)=>web.middlewares(req,res));
+  const web=await createServer({configFile:require('node:path').resolve('apps/web/vite.config.js'),server:{middlewareMode:true,hmr:{server:webHttp},proxy:{'/api':{target:`http://127.0.0.1:${api.address().port}`}}}});
+  webHttp.listen(0,'127.0.0.1');
   await new Promise(resolve=>webHttp.once('listening',resolve));
   process.env.RELAY_URL=`http://127.0.0.1:${webHttp.address().port}`;
   const browser = await connect();
@@ -647,7 +648,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     assert.equal(await run("document.querySelector('[data-action=planning-release]').disabled"),true);
     await input('#edit-vehicle',truck.id,'change');await click('[data-action="planning-edit"]');
     await waitFor('planningResult?.accepted===false && !planningBusy');
-    await input('#edit-vehicle',draft.vehicleId,'change');await click('[data-action="planning-edit"]');
+    await input('#edit-vehicle',draft.vehicleId,'change');await input('#edit-driver','demo-user-driver','change');await click('[data-action="planning-edit"]');
     await waitFor('planningResult?.accepted===true && !planningBusy');
     await click('[data-action="planning-release"]');await waitFor('planningResult?.kind==="release" && !planningBusy');
     assert.equal(await run('planningDay.trips[0].status'),'RELEASED');

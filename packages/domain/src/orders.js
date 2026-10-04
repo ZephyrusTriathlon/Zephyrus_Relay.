@@ -4,13 +4,13 @@ const measurement = z.number().min(0.001).max(999999).refine(n => Math.abs(n * 1
 export const orderInput = z.strictObject({
   outletId: z.string().min(1).max(100).optional(),
   deliveryDate: z.iso.date(),
-  temperatureRequirement: z.enum(['AMBIENT', 'CHILLED']),
+  temperatureRequirement: z.enum(['AMBIENT', 'CHILLED', 'FROZEN']),
   items: z.array(z.strictObject({
     productCode: z.string().trim().min(1).max(100),
-    description: z.string().trim().min(1).max(200),
+    description: z.string().trim().min(1).max(200).optional(),
     units: z.number().int().positive().max(100000),
-    unitWeightKg: measurement,
-    unitVolumeM3: measurement
+    unitWeightKg: measurement.optional(),
+    unitVolumeM3: measurement.optional()
   })).min(1).max(100)
 });
 

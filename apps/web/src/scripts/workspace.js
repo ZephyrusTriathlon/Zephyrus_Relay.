@@ -3,6 +3,7 @@ let authenticatedUser = null;
 let identityReady = false;
 let identityGeneration = 0;
 let sessionNotice = "";
+let judgeScenario = null;
 const currentAccount = () => authenticatedUser;
 const accountRole = account => ({STORE_MANAGER:'Store Manager',DISPATCHER:'Dispatcher',LOADER:'Loader',DRIVER:'Driver'})[account.role];
 async function authRequest(path, body) {
@@ -28,6 +29,9 @@ async function refreshIdentity() {
   const generation = identityGeneration;
   try {
     const {user} = await authRequest('me');
+    const scenarioResponse=await fetch('/api/scenario',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(8000)}).catch(()=>null);
+    const scenarioData=scenarioResponse?.ok?await scenarioResponse.json():null;
+    if(generation===identityGeneration)judgeScenario=scenarioData?.scenario??null;
     if(generation !== identityGeneration)return;
     sessionNotice = '';
     authenticatedUser = {...user, name:user.displayName, workspace:({DISPATCHER:'dispatch',STORE_MANAGER:'store',LOADER:'loader',DRIVER:'delivery'})[user.role]};
@@ -123,7 +127,7 @@ function render() {
       <div class="sidebar-bottom"><div class="demo-note"><b>Waypoint Group delivery network</b><span>Delivery operations · Sri Lanka</span></div><div class="profile"><span class="avatar">${esc(r.initials)}</span><div class="stack"><b>${r.user}</b><small>${r.title}</small></div></div></div>
     </aside>
     <div class="shell">
-      <main id="main" tabindex="-1" class="view-${role}">${role === 'dispatch' ? dispatchView() : role === 'store' ? storeView() : role === 'loader' ? loaderView() : deliveryView()}</main>
+      <main id="main" tabindex="-1" class="view-${role}">${judgeScenario?`<p class="notice" role="status">${esc(judgeScenario.message)}</p>`:''}${role === 'dispatch' ? dispatchView() : role === 'store' ? storeView() : role === 'loader' ? loaderView() : deliveryView()}</main>
     </div>`;
   document.querySelectorAll('#main [data-role]').forEach(button=>button.remove());
   if(!window.relayDevTools)document.querySelectorAll('[data-action="offline"],[data-action="reset-confirm"]').forEach(button=>button.remove());

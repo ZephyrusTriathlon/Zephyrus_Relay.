@@ -50,7 +50,7 @@ test('PostgreSQL order creation, scope, audit history and API restart persistenc
   await start();
   const cookie=await login('store'), dispatcher=await login('dispatcher');
   const {user}=await (await request('/auth/me',cookie)).json();
-  const payload={deliveryDate:'2025-01-04',temperatureRequirement:'AMBIENT',items:[{productCode:'STAGE4-TEST',description:'Test cartons',units:3,unitWeightKg:2.125,unitVolumeM3:0.035}]};
+  const payload={deliveryDate:'2025-01-04',temperatureRequirement:'AMBIENT',items:[{productCode:'WPF-DRY-24',description:'Dry grocery essentials',units:3,unitWeightKg:6,unitVolumeM3:0.041}]};
   async function create(body=payload) { const r=await request('/orders',cookie,body);assert.equal(r.status,201,JSON.stringify(await r.clone().json()));const {order}=await r.json();ids.push(order.id);return order; }
   await t.test('concurrent submissions and lost acknowledgements recover one order across cutoff without accepting changed content',async()=>{
     const id=require('node:crypto').randomUUID(),headers={'Idempotency-Key':id};ids.push(id);
@@ -160,10 +160,10 @@ test('PostgreSQL order creation, scope, audit history and API restart persistenc
   });
   let ambient,chilled;
   await t.test('Fresh ambient, chilled and repeated outlet/date orders retain separate IDs and quantities',async()=>{
-    ambient=await create();chilled=await create({...payload,temperatureRequirement:'CHILLED'});const repeated=await create();
+    ambient=await create();chilled=await create({...payload,temperatureRequirement:'CHILLED',items:[{productCode:'WPF-MILK-1L',units:3}]});const repeated=await create();
     assert.equal(new Set([ambient.id,chilled.id,repeated.id]).size,3);
     assert.equal(ambient.brand,'FRESH');assert.equal(chilled.brand,'FRESH');assert.equal(ambient.temperatureRequirement,'AMBIENT');assert.equal(chilled.temperatureRequirement,'CHILLED');
-    assert.equal(ambient.units,3);assert.equal(ambient.weightKg,6.375);assert.equal(ambient.volumeM3,0.105);
+    assert.equal(ambient.units,3);assert.equal(ambient.weightKg,18);assert.equal(ambient.volumeM3,0.123);
     assert.equal(ambient.status,'CONFIRMED');assert.equal(ambient.createdById,user.id);
     assert.equal(ambient.history.length,1);assert.equal(ambient.history[0].status,'CONFIRMED');
     const persisted=await db.order.findUnique({where:{id:ambient.id},include:{items:true}});assert.equal(persisted.outletId,user.outletId);assert.equal(persisted.items[0].cartons,3);

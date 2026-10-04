@@ -23,19 +23,20 @@ async function context(db,date) {
     db.trip.findMany({where:{deliveryDate:{gte:day(week.start),lt:day(week.end)}},include:{vehicle:true,driver:{select:{id:true,displayName:true}},stops:{orderBy:{position:'asc'},include:{allocations:{include:{order:{include:includeOrder},loadingCheck:true,loadingIssues:true,exceptions:true,proof:{include:{receipt:true}}}}}}},orderBy:{id:'asc'}})
   ]);
   const data=await loadPlanningData(depots);
-  const existingTrips=trips.map(trip=>{
+  const existingTrips=await Promise.all(trips.map(async trip=>{
     const orders=trip.stops.flatMap(stop=>stop.allocations.map(a=>a.order));
     // Existing Stage 2 draft has no snapshot: derive its reservation from persisted
     // orders/departure and the same shared model, never from browser prototype fuel.
     let result=trip.planningContext?.metrics;
-    if(trip.status!=='CANCELLED'&&!result&&trip.plannedDepartureAt&&orders.length){
-      const derived=validateTrip({date:key(trip.deliveryDate),vehicle:trip.vehicle,orders,departureMinute:businessMinute(trip.plannedDepartureAt),...data});
+    if(trip.status!=='CANCELLED'&&(!result||result.policy!==PLANNING_POLICY.version)&&trip.plannedDepartureAt&&orders.length){
+      const tripCalendar=key(trip.deliveryDate)===date?calendar:await db.calendarDay.findUnique({where:{date:trip.deliveryDate}});
+      const derived=validateTrip({date:key(trip.deliveryDate),vehicle:trip.vehicle,orders,departureMinute:businessMinute(trip.plannedDepartureAt),calendar:tripCalendar,...data});
       if(!derived.violations.some(v=>['INVALID_PLANNING_INPUT','ROUTE_DATA_MISSING'].includes(v.code)))result=derived.metrics;
     }
     return {id:trip.id,vehicleId:trip.vehicleId,date:key(trip.deliveryDate),status:trip.status,sequence:trip.sequence,
       departureMinute:result?.departureMinute,returnMinute:result?.returnMinute,fuelLitres:result?.fuelLitres};
-  });
-  return {vehicles,trips,existingTrips,...data};
+  }));
+  return {vehicles,trips,existingTrips,calendar,...data};
 }
 
 export function planningRoutes({database=getDatabase}={}) {
@@ -49,7 +50,7 @@ export function planningRoutes({database=getDatabase}={}) {
       const c=await context(tx,date);
       const orders=await tx.order.findMany({where:{deliveryDate:day(date)},include:{...includeOrder,allocation:true},orderBy:{id:'asc'}});
       const drivers=await tx.user.findMany({where:{role:'DRIVER',active:true},select:{id:true,displayName:true},orderBy:{displayName:'asc'}});
-      return {date,policy:PLANNING_POLICY,orders,drivers,vehicles:c.vehicles,trips:c.trips.filter(t=>key(t.deliveryDate)===date),reservations:c.existingTrips};
+      return {date,policy:PLANNING_POLICY,calendar:c.calendar,orders,drivers,vehicles:c.vehicles,trips:c.trips.filter(t=>key(t.deliveryDate)===date),reservations:c.existingTrips};
     },{isolationLevel:'RepeatableRead',timeout:30000});
     res.json(snapshot);
   }));
@@ -109,6 +110,25 @@ export function planningRoutes({database=getDatabase}={}) {
   }));
   // Draft edits preserve allocation identity; vehicle, Driver, departure and stop order
   // are mutable here. All writers use the same lock as assisted allocation.
+  router.post('/reschedule',run(async(req,res)=>{
+    const parsed=z.strictObject({orderId:z.string().min(1),version:z.string().datetime(),date:z.iso.date(),reason:z.enum(['CAPACITY','TEMPERATURE','ACCESS','DELIVERY_WINDOW','FUEL','TIME_BUDGET','OTHER']),explanation:z.string().trim().min(5).max(500)}).safeParse(req.body);
+    if(!parsed.success)throw error('INVALID_PLANNING_INPUT','Choose an order, later operating date, reason and explanation.');
+    const input=parsed.data;
+    const result=await database().$transaction(async tx=>{
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(76605)`;
+      const order=await tx.order.findUnique({where:{id:input.orderId},include:{allocation:true}});
+      if(!order||order.updatedAt.toISOString()!==input.version||order.status!=='DEFERRED'||order.allocation)throw error('PLANNING_CONFLICT','Only an unchanged, unallocated deferred order can move. Reload the day.',409);
+      if(input.date<=key(order.deliveryDate))throw error('INVALID_PLANNING_DATE','Choose a later operating date.');
+      const target=await tx.calendarDay.findUnique({where:{date:day(input.date)}});
+      if(!target?.isOperating)throw error('INVALID_PLANNING_DATE','The target date must be operating in the supplied calendar.');
+      const now=new Date(),from=key(order.deliveryDate);
+      await tx.deferral.create({data:{orderId:order.id,reason:input.reason,explanation:input.explanation,impact:`Dispatcher moved the order from ${from} to ${input.date}; allocation and all constraints must be checked again.`,deferredById:req.user.id,deferredAt:now,nextEligibleDate:day(input.date),planningContext:{action:'RESCHEDULE',fromDate:from,toDate:input.date,actorId:req.user.id}}});
+      await tx.order.update({where:{id:order.id},data:{requestedDeliveryDate:order.requestedDeliveryDate??order.deliveryDate,deliveryDate:day(input.date),status:'CONFIRMED'}});
+      await tx.orderStatusEvent.create({data:{orderId:order.id,status:'CONFIRMED',note:`Rescheduled ${from} → ${input.date} by ${req.user.id}: ${input.explanation}`}});
+      return {rescheduled:true,orderId:order.id,fromDate:from,date:input.date};
+    },{timeout:30000,maxWait:10000});
+    res.json(result);
+  }));
   router.post('/edit',run(async(req,res)=>{
     const parsed=z.strictObject({date:z.iso.date(),tripId:z.string().min(1),version:z.string().datetime(),vehicleId:z.string().min(1),driverId:z.string().min(1).nullable().optional(),departureMinute:z.number().int().min(0).max(1439),orderIds:z.array(z.string()).min(1).max(200)}).safeParse(req.body);
     if(!parsed.success)throw error('INVALID_PLANNING_INPUT','Provide a draft version, vehicle, departure and ordered manifest.');
@@ -141,6 +161,9 @@ export function planningRoutes({database=getDatabase}={}) {
     const result=await database().$transaction(async tx=>{
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(76605)`;
       const c=await context(tx,date),drafts=c.trips.filter(t=>key(t.deliveryDate)===date&&t.status==='DRAFT');
+      const activeDrivers=await tx.user.findMany({where:{role:'DRIVER',active:true},select:{id:true}});
+      const unassigned=drafts.filter(t=>!activeDrivers.some(d=>d.id===t.driverId));
+      if(unassigned.length)return {released:false,trips:[],violations:unassigned.map(t=>({code:'DRIVER_REQUIRED',tripId:t.id,message:`Assign an active Driver to ${t.tripNumber} before releasing the plan.`}))};
       // Recompute every draft before cross-validating, so stale metric snapshots
       // cannot hide changed order quantities, travel or vehicle efficiency.
       const candidates=drafts.map(trip=>{

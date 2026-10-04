@@ -9,7 +9,7 @@ import helmet from 'helmet';
 import { fileURLToPath } from 'node:url';
 import { developmentReads } from './routes/development.js';
 import { publicPath, containedFile, legacyScripts, notFound } from '../../web/static-policy.js';
-const defaultWebRoot = fileURLToPath(new URL('../../web/dist/', import.meta.url));
+const defaultWebRoot = process.env.RELAY_WEB_ROOT || fileURLToPath(new URL('../../web/dist/', import.meta.url));
 export function createApp({ webRoot = defaultWebRoot, devReads = false, database, orderClock, ...authOptions } = {}) {
   const app = express();
   app.disable('x-powered-by');
@@ -30,6 +30,11 @@ export function createApp({ webRoot = defaultWebRoot, devReads = false, database
     catch { res.status(503).json({ status: 'unavailable' }); }
   });
   app.locals.sessionStore = installAuth(app, { database, ...authOptions });
+  app.get('/api/scenario', (req,res) => {
+    res.set('Cache-Control','no-store');
+    if(!req.user)return res.status(401).json({error:'Authentication required'});
+    res.json({scenario:orderClock?.scenario ?? null});
+  });
   app.use('/api/orders', orderRoutes({ database, orderClock }));
   app.use('/api/planning', planningRoutes({ database }));
   app.use('/api/operations', operationRoutes({ database }));

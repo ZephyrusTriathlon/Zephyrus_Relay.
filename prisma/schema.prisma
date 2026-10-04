@@ -34,6 +34,7 @@ enum TemperatureCapability {
 enum TemperatureRequirement {
   AMBIENT
   CHILLED
+  FROZEN
 }
 enum FuelType {
   DIESEL
@@ -213,6 +214,7 @@ model Order {
   outletId              String
   outlet                Outlet @relation(fields: [outletId], references: [id], onDelete: Restrict)
   deliveryDate          DateTime @db.Date
+  requestedDeliveryDate DateTime? @db.Date
   status                OrderStatus @default(CONFIRMED)
   temperatureRequirement TemperatureRequirement
   windowOpenTime        String @db.VarChar(5)

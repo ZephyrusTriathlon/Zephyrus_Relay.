@@ -36,15 +36,15 @@ test('Stage 7 real online lifecycle, authorization, retries and responsive brows
   const op=(actor,action,allocation,body={},status=200)=>json(`/operations/trips/${trip.id}${allocation?`/allocations/${allocation.id}`:''}/${action}`,actor,body,status);
   await t.test('Store creates isolated orders, Stage 6 allocates and releases one shared physical stop',async()=>{
     for(let i=0;i<2;i++){
-      const {order}=await json('/orders',store,{deliveryDate:date,temperatureRequirement:'AMBIENT',items:[{productCode:'STAGE7',description:'Stage 7 isolated cartons',units:2,unitWeightKg:1,unitVolumeM3:0.01}]},201);ids.push(order.id);
+      const {order}=await json('/orders',store,{deliveryDate:date,temperatureRequirement:'AMBIENT',items:[{productCode:'WPF-DRY-24',units:2}]},201);ids.push(order.id);
     }
     const plan=await json('/planning/allocate',dispatcher,{date});assert.equal(plan.trips.length,1);tripIds.push(plan.trips[0].id);
     trip=await db.trip.findUnique({where:{id:tripIds[0]},include:{stops:true,allocations:true}});assert.equal(trip.stops.length,1);[a,b]=trip.allocations;
-    const release=await json('/planning/release',dispatcher,{date});assert.equal(release.released,true);
+    const blocked=await json('/planning/release',dispatcher,{date},409);assert.equal(blocked.violations[0].code,'DRIVER_REQUIRED');
     assert.equal((await json('/operations/trips',driver)).trips.some(t=>t.id===trip.id),false);
     await op(driver,'start',null,{},404);
-    // Fixture-only assignment, not a production scheduling subsystem.
-    await db.trip.update({where:{id:trip.id},data:{driverId:driverUser.id}});
+    const review=await json('/planning/edit',dispatcher,{date,tripId:trip.id,version:trip.updatedAt.toISOString(),vehicleId:trip.vehicleId,driverId:driverUser.id,departureMinute:240,orderIds:trip.allocations.map(a=>a.orderId)});assert.equal(review.accepted,true);
+    const release=await json('/planning/release',dispatcher,{date});assert.equal(release.released,true);
     assert.equal((await json('/operations/trips',loader)).trips.find(t=>t.id===trip.id).status,'RELEASED');
     assert.equal((await json('/operations/trips',driver)).trips.find(t=>t.id===trip.id).stops.length,1);
   });

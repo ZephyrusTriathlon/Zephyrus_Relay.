@@ -1,9 +1,9 @@
 // Explicit fresh-scenario acceptance: advances the seeded route, never resets it.
-// Run only against a dedicated fresh public-reference database with RELAY_JUDGE_TEST=true.
+// Run only against a dedicated fresh supplied-reference database with RELAY_JUDGE_TEST=true.
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {randomUUID}=require('node:crypto');
-test('fresh public judge scenario on production-default built UI',{timeout:240000},async t=>{
+test('fresh supplied judge scenario on production-default built UI',{timeout:240000},async t=>{
   assert.equal(process.env.RELAY_JUDGE_TEST,'true','Explicit opt-in required: this test completes the seeded judge route');
   require('node:fs').mkdirSync(require('node:path').resolve(__dirname,'../artifacts/stage10/judge'),{recursive:true});
   process.env.SESSION_COOKIE_SECURE='false'; // loopback HTTP production preview
@@ -15,7 +15,9 @@ test('fresh public judge scenario on production-default built UI',{timeout:24000
   t.after(async()=>{await b?.close();if(server)await new Promise(r=>server.close(r));await app?.locals.sessionStore.close();await db.$disconnect();});
   assert.equal((await db.trip.findUniqueOrThrow({where:{id:'demo-trip-01'}})).status,'DRAFT','Use a fresh database; existing judge work is preserved');
   assert.equal(await db.order.count(),5);
-  app=createApp({database:()=>db,production:true,sessionSecret:process.env.SESSION_SECRET});
+  const {configuredOrderClock}=await import('../apps/api/src/order-clock.js');
+  const orderClock=await configuredOrderClock({database:()=>db,env:{NODE_ENV:'production',RELAY_JUDGE_MODE:'true'}});
+  app=createApp({database:()=>db,production:true,sessionSecret:process.env.SESSION_SECRET,orderClock});
   server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
   const base=process.env.RELAY_JUDGE_BASE_URL||`http://127.0.0.1:${server.address().port}`;
   b=await require('./cdp').connect();
@@ -60,6 +62,8 @@ test('fresh public judge scenario on production-default built UI',{timeout:24000
     assert.ok(await db.deferral.count({where:{orderId:'demo-order-capacity'}})>1);
     await b.click('[data-action="planning-review"][data-trip="demo-trip-01"]');assert.equal(await b.run('planningEdit.departureMinute'),285);await b.input('#edit-departure','04:46');await b.click('[data-action="planning-edit"]');await wait('!planningBusy && !planningEdit');
     assert.equal((await db.trip.findUnique({where:{id:'demo-trip-01'}})).plannedDepartureAt.toISOString(),'2025-01-01T23:16:00.000Z');
+    const unassigned=await b.run('planningDay.trips.filter(t=>t.status==="DRAFT"&&!t.driverId).map(t=>t.id)');
+    for(const id of unassigned){await b.click(`[data-action="planning-select-trip"][data-trip="${id}"]`);await b.click(`[data-action="planning-review"][data-trip="${id}"]`);await b.input('#edit-driver','demo-user-driver','change');await b.click('[data-action="planning-edit"]');await wait('!planningBusy && !planningEdit');}
     await layouts('dispatch');await b.click('[data-action="planning-release"]');await wait('!planningBusy && planningDay.trips.every(t=>t.status==="RELEASED")');await logout();
   });
   const select=async()=>{await wait('!fieldLoading && fieldTrips.length>0');await b.input('#field-trip','demo-trip-01','change');await wait('selectedFieldTrip()?.id==="demo-trip-01"');};

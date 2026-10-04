@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { getDatabase } from '../db.js';
 import { orderInput, orderDateError, orderingWindow } from '../../../../packages/domain/src/orders.js';
+import { catalogue, canonicalOrder } from '../../../../packages/domain/src/catalogue.js';
 
 const include = {
   outlet: true, items: { orderBy: { lineNumber: 'asc' } },
@@ -32,19 +33,21 @@ export function orderRoutes({ database = getDatabase, orderClock = () => new Dat
       orderBy: { date: 'asc' }, select: { date: true }
     });
     ordering.earliestDeliveryDate = nextOperatingDay?.date.toISOString().slice(0, 10) ?? null;
-    res.json({ outlet, ordering });
+    res.json({ outlet, ordering, catalogue, scenario: orderClock.scenario ?? null });
   });
   router.post('/', async (req, res) => {
     const parsed = orderInput.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: { code: 'INVALID_PAYLOAD', message: 'Invalid order payload', details: parsed.error.issues } });
-    const input = parsed.data;
+    let input;
+    try { input = canonicalOrder(parsed.data); }
+    catch(error) { return res.status(400).json({error:{code:'INVALID_PRODUCT',message:error.message}}); }
     const actionId=req.get('Idempotency-Key');
     if(actionId&&!z.uuid().safeParse(actionId).success)return res.status(400).json({error:{code:'INVALID_ACTION_ID',message:'Use a valid order submission identifier.'}});
     const replay=async()=>{
       if(!actionId)return false;
       const existing=await database().order.findUnique({where:{id:actionId},include});
       if(!existing)return false;
-      const same=existing.createdById===req.user.id&&existing.outletId===req.user.outletId&&existing.deliveryDate.toISOString().slice(0,10)===input.deliveryDate&&existing.temperatureRequirement===input.temperatureRequirement&&
+      const same=existing.createdById===req.user.id&&existing.outletId===req.user.outletId&&(existing.requestedDeliveryDate??existing.deliveryDate).toISOString().slice(0,10)===input.deliveryDate&&existing.temperatureRequirement===input.temperatureRequirement&&
         existing.items.length===input.items.length&&existing.items.every((item,i)=>item.productCode===input.items[i].productCode&&item.description===input.items[i].description&&item.cartons===input.items[i].units&&Number(item.unitWeightKg)===input.items[i].unitWeightKg&&Number(item.unitVolumeM3)===input.items[i].unitVolumeM3);
       if(!same)res.status(409).json({error:{code:'ORDER_SUBMISSION_CONFLICT',message:'This submission identifier was already used. Refresh and review your order.'}});
       else res.status(200).json({order:serialize(existing)});
@@ -68,7 +71,7 @@ export function orderRoutes({ database = getDatabase, orderClock = () => new Dat
     try { order = await database().order.create({ data: {
       ...(actionId?{id:actionId}:{}),
       orderNumber: `ORD-${input.deliveryDate.replaceAll('-','')}-${randomUUID().replaceAll('-','').slice(0,12).toUpperCase()}`, outletId: outlet.id, createdById: req.user.id,
-      deliveryDate, temperatureRequirement: input.temperatureRequirement,
+      deliveryDate, requestedDeliveryDate: deliveryDate, temperatureRequirement: input.temperatureRequirement,
       windowOpenTime: outlet.windowOpenTime, windowCloseTime: outlet.windowCloseTime, createdAt: now,
       items: { create: input.items.map(({ units, ...item }, index) => ({ ...item, cartons: units, lineNumber: index + 1, temperatureRequirement: input.temperatureRequirement })) }
     }, include }); }

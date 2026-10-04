@@ -1,0 +1,10 @@
+{
+  "provenance": "Supplied Tech-Triathlon operational references; exact copies",
+  "files": {
+    "outlets.csv": "206a915f16c9b522473d4ad314d1c7c435345911427d9e0878d6e66241c32c42",
+    "vehicles.csv": "f70175f786574f4c4d07480df263b5ba59918bcecd7a91e5c59d3f7a75b52b1f",
+    "calendar.csv": "2201b18787287dc9621cde516c22ac7ce656da76ff0ccc956e1325a7b2fc3113",
+    "district_travel.csv": "ac31c4d7a8adcbf8e020bec42d9037bc6ece0fc2cabbf116269710dbe2d239c5",
+    "service_allowance.csv": "9b0fe764a50e663ef293a4cb1f9b104ce71b77a3afc863db08228f6e497590a9"
+  }
+}

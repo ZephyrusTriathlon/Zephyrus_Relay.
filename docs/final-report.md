@@ -1,5 +1,7 @@
 # Stage 9 final stabilization report
 
+> Historical Stage 9 record. See the [Stage 10 report](stage10-report.md) for the current fidelity audit, fixes and verification.
+
 2026-10-03. Implementation and native verification are complete. **Docker image/Compose execution remains unverified: this machine has neither Docker nor Podman.** Human submission sign-off and a public HTTPS deployment are also pending. No commit or push was made.
 
 ## Delivered system

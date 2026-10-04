@@ -1,5 +1,7 @@
 # Stage 9 requirement and fidelity audit
 
+> Historical Stage 9 record. See the [Stage 10 report](stage10-report.md) for the current fidelity audit, fixes and verification.
+
 Audit date: 2026-10-03. Scope: supplied Stage 9 checklist; no separate original Hackathon brief was found in tracked files. Historical `docs/designathon/` is preserved. Execution results and outstanding verification are recorded in [final report](final-report.md).
 
 ## Requirements matrix

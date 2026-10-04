@@ -46,8 +46,10 @@ test('Stage 7 second-audit regressions on persisted operational fixtures',{timeo
   const dispatcherReload=async(status)=>{
     await dispatchBrowser.send('Page.reload');await dispatchBrowser.waitFor("!!document.querySelector('#planning-date')");
     await dispatchBrowser.input('#planning-date',date,'change');await dispatchBrowser.click('[data-action="planning-load"]');await dispatchBrowser.waitFor('!!planningDay && !planningBusy');
-    const text=await dispatchBrowser.run(`([...document.querySelectorAll('h3')].find(h=>h.textContent.includes(${JSON.stringify(multi.trip.tripNumber)}))||{}).textContent`);
-    assert.ok(text?.endsWith('| '+status),`Dispatcher reload must render ${status}: ${text}`);
+    await dispatchBrowser.click(`[data-action="planning-select-trip"][data-trip="${multi.trip.id}"]`);
+    const text=await dispatchBrowser.run('document.querySelector(".route-heading .badge")?.textContent');
+    const label=await dispatchBrowser.run(`operationalLabel(${JSON.stringify(status)})`);
+    assert.equal(text,label,`Dispatcher reload must render ${status}: ${text}`);
   };
   const controls=async(b,selectors)=>{
     assert.equal(await b.run('document.documentElement.scrollWidth<=innerWidth+1'),true);

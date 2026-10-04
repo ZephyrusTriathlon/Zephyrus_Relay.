@@ -34,7 +34,7 @@ test('PostgreSQL order creation, scope, audit history and API restart persistenc
     await new Promise(resolve => server.once('listening',resolve));
     instance = {app,server,base:`http://127.0.0.1:${server.address().port}/api`}; instances.push(instance);
   }
-  const request = (path, cookie, body) => fetch(instance.base+path,{headers:{...(cookie ? {cookie} : {}),...(body !== undefined ? {'Content-Type':'application/json'} : {})},...(body !== undefined ? {method:'POST',body:JSON.stringify(body)} : {})});
+  const request = (path, cookie, body, headers={}) => fetch(instance.base+path,{headers:{...(cookie ? {cookie} : {}),...(body !== undefined ? {'Content-Type':'application/json'} : {}),...headers},...(body !== undefined ? {method:'POST',body:JSON.stringify(body)} : {})});
   async function login(identifier) { const r=await request('/auth/login',null,{identifier,password:'RelayDemo!26'});assert.equal(r.status,200);const cookie=r.headers.get('set-cookie').split(';')[0];cookies.push(cookie);return cookie; }
   t.after(async () => {
     // Only remove records created by this test; no demo or user history is replaced.
@@ -52,6 +52,21 @@ test('PostgreSQL order creation, scope, audit history and API restart persistenc
   const {user}=await (await request('/auth/me',cookie)).json();
   const payload={deliveryDate:'2025-01-04',temperatureRequirement:'AMBIENT',items:[{productCode:'STAGE4-TEST',description:'Test cartons',units:3,unitWeightKg:2.125,unitVolumeM3:0.035}]};
   async function create(body=payload) { const r=await request('/orders',cookie,body);assert.equal(r.status,201,JSON.stringify(await r.clone().json()));const {order}=await r.json();ids.push(order.id);return order; }
+  await t.test('concurrent submissions and lost acknowledgements recover one order across cutoff without accepting changed content',async()=>{
+    const id=require('node:crypto').randomUUID(),headers={'Idempotency-Key':id};ids.push(id);
+    const responses=await Promise.all([request('/orders',cookie,payload,headers),request('/orders',cookie,payload,headers)]);
+    assert.deepEqual(responses.map(r=>r.status).sort(),[200,201]);
+    const results=await Promise.all(responses.map(r=>r.json()));assert.deepEqual(results[0],results[1]);
+    assert.equal(await db.order.count({where:{id}}),1);assert.equal(await db.orderStatusEvent.count({where:{orderId:id}}),1);
+    const previous=now;now=new Date('2025-01-03T16:01:00+05:30');
+    try{assert.equal((await request('/orders',cookie,payload,headers)).status,200);}finally{now=previous;}
+    assert.equal((await request('/orders',cookie,{...payload,items:[{...payload.items[0],units:4}]},headers)).status,409);
+    assert.equal((await request('/orders',cookie,payload,{'Idempotency-Key':'invalid'})).status,400);
+    // A pre-existing identity belonging to another owner cannot reveal its order.
+    const foreignId=require('node:crypto').randomUUID();foreignIds.push(foreignId);
+    await db.order.create({data:{id:foreignId,orderNumber:'REPLAY-'+foreignId,outletId:(await db.outlet.findFirstOrThrow({where:{id:{not:user.outletId}}})).id,createdById:(await db.user.findFirstOrThrow({where:{role:'DISPATCHER'}})).id,deliveryDate:new Date('2025-01-04T00:00:00Z'),temperatureRequirement:'AMBIENT',windowOpenTime:'05:00',windowCloseTime:'08:00'}});
+    const denied=await request('/orders',cookie,payload,{'Idempotency-Key':foreignId});assert.equal(denied.status,409);assert.equal((await denied.json()).order,undefined);
+  });
   await t.test('explicit judge clock validates supplied coverage and controls context and acceptance only on the server', async () => {
     const { configuredOrderClock } = await import('../apps/api/src/order-clock.js');
     const configure = (timestamp, extra = {}) => configuredOrderClock({ env: { RELAY_DEMO_ORDER_NOW: timestamp, ...extra }, database: () => db });

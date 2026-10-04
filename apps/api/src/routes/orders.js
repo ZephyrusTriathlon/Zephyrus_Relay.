@@ -38,7 +38,20 @@ export function orderRoutes({ database = getDatabase, orderClock = () => new Dat
     const parsed = orderInput.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: { code: 'INVALID_PAYLOAD', message: 'Invalid order payload', details: parsed.error.issues } });
     const input = parsed.data;
+    const actionId=req.get('Idempotency-Key');
+    if(actionId&&!z.uuid().safeParse(actionId).success)return res.status(400).json({error:{code:'INVALID_ACTION_ID',message:'Use a valid order submission identifier.'}});
+    const replay=async()=>{
+      if(!actionId)return false;
+      const existing=await database().order.findUnique({where:{id:actionId},include});
+      if(!existing)return false;
+      const same=existing.createdById===req.user.id&&existing.outletId===req.user.outletId&&existing.deliveryDate.toISOString().slice(0,10)===input.deliveryDate&&existing.temperatureRequirement===input.temperatureRequirement&&
+        existing.items.length===input.items.length&&existing.items.every((item,i)=>item.productCode===input.items[i].productCode&&item.description===input.items[i].description&&item.cartons===input.items[i].units&&Number(item.unitWeightKg)===input.items[i].unitWeightKg&&Number(item.unitVolumeM3)===input.items[i].unitVolumeM3);
+      if(!same)res.status(409).json({error:{code:'ORDER_SUBMISSION_CONFLICT',message:'This submission identifier was already used. Refresh and review your order.'}});
+      else res.status(200).json({order:serialize(existing)});
+      return true;
+    };
     if (input.outletId && input.outletId !== req.user.outletId) return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'You can only order for your assigned outlet.' } });
+    if(await replay())return;
     const outlet = await database().outlet.findUnique({ where: { id: req.user.outletId } });
     if (!outlet) return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Outlet assignment is unavailable.' } });
     const deliveryDate = new Date(`${input.deliveryDate}T00:00:00Z`);
@@ -50,12 +63,16 @@ export function orderRoutes({ database = getDatabase, orderClock = () => new Dat
       code: 'INVALID_DELIVERY_DATE',
       message: calendarDay ? 'Delivery date is not an operating date in the shared calendar.' : 'Delivery date is not covered by the shared calendar.'
     } });
-    const order = await database().order.create({ data: {
-      orderNumber: `ORD-${randomUUID()}`, outletId: outlet.id, createdById: req.user.id,
+    // A unique submission identity lets a retry recover a lost acknowledgement.
+    let order;
+    try { order = await database().order.create({ data: {
+      ...(actionId?{id:actionId}:{}),
+      orderNumber: `ORD-${input.deliveryDate.replaceAll('-','')}-${randomUUID().replaceAll('-','').slice(0,12).toUpperCase()}`, outletId: outlet.id, createdById: req.user.id,
       deliveryDate, temperatureRequirement: input.temperatureRequirement,
       windowOpenTime: outlet.windowOpenTime, windowCloseTime: outlet.windowCloseTime, createdAt: now,
       items: { create: input.items.map(({ units, ...item }, index) => ({ ...item, cartons: units, lineNumber: index + 1, temperatureRequirement: input.temperatureRequirement })) }
-    }, include });
+    }, include }); }
+    catch(error){if(error.code==='P2002'&&await replay())return;throw error;}
     res.status(201).location(`/api/orders/${order.id}`).json({ order: serialize(order) });
   });
   router.get('/', async (req, res) => {

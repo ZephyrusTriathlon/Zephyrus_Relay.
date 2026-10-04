@@ -147,3 +147,13 @@
 .store-review-line b { overflow-wrap: anywhere; min-width: 0; }
 .store-filters label { min-width: 0; }
 .store-filters input[type="date"] { max-width: 100%; }
+
+.catalogue-table .store-quantity-cell { width:180px; }.catalogue-table .store-mobile-label { display:none; }.catalogue-table .store-product-cell { width:auto; }
+@media(max-width:760px) {
+  .catalogue-table .store-product-row { grid-template-columns:minmax(0,1fr); }
+  .catalogue-table .store-product-row .store-quantity-cell { grid-column:1; grid-row:2; width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .catalogue-table .store-mobile-label { display:block; margin:0; }
+  .store-filters:has(#store-date) { display:grid; grid-template-columns:minmax(0,1fr); }
+  .store-filters:has(#store-date) .filter-select { width:100%; margin-top:6px; }.store-filters input[type="date"] { width:100%; margin-top:6px; }
+  .store-toolbar .tabs { gap:16px; }
+}

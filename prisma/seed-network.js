@@ -43,18 +43,24 @@ export async function seedNetwork(db, { dataDir } = {}) {
       // Upgrade Stage 2 accounts once; never reset an existing password on repeat seed.
       await tx.user.updateMany({ where: { id: user.id, source: RecordSource.DEMO, passwordHash: null },
         data: { email: user.email, depotId: user.depotId, passwordHash: passwordHashes[index] } });
+      // Label-only upgrades preserve credentials and operational progress.
+      await tx.user.updateMany({where:{id:user.id,source:RecordSource.DEMO,displayName:`Relay demo ${user.role.toLowerCase().replace('_',' ')}`},data:{displayName:user.displayName}});
     }
     for (const { item, ...order } of demo.orders) {
       await createOnce('order', order);
       await createOnce('orderItem', { ...item, orderId: order.id });
+      await tx.order.updateMany({where:{id:order.id,source:RecordSource.DEMO,orderNumber:order.orderNumber.replace('ORD-','DEMO-')},data:{orderNumber:order.orderNumber}});
+      await tx.orderItem.updateMany({where:{id:item.id,description:{in:['Relay demo chilled cartons','Relay demo ambient cartons']}},data:{description:item.description,productCode:item.productCode}});
     }
     await createOnce('trip', demo.trip);
+    await tx.trip.updateMany({where:{id:demo.trip.id,source:RecordSource.DEMO,tripNumber:demo.trip.tripNumber.replace('TRIP-','DEMO-')},data:{tripNumber:demo.trip.tripNumber}});
     for (const stop of demo.stops) await createOnce('tripStop', stop);
     for (const allocation of demo.allocations) {
       await createOnce('allocation', allocation);
       await createOnce('loadingCheck', { id: `demo-loading-${allocation.id.slice(16)}`, allocationId: allocation.id, status: demo.loadingStatus, updatedAt: demo.createdAt });
     }
     await createOnce('deferral', demo.deferral);
+    await tx.deferral.updateMany({where:{id:demo.deferral.id,explanation:'Relay-created example: requested cartons exceed the largest supplied vehicle weight capacity.'},data:{explanation:demo.deferral.explanation,impact:demo.deferral.impact}});
     const result = await counts(tx);
     if (result.outlets !== 120 || result.vehicles !== 60 || result.depots !== 2 || result.calendarDays !== network.calendar.length) throw new Error('Unexpected supplied records already exist; seed rolled back without deleting them');
     return result;

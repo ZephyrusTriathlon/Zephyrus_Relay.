@@ -12,7 +12,7 @@ export function makeDemo(network) {
   const createdAt = new Date('2025-01-01T10:00:00+05:30');
   const source = RecordSource.DEMO;
   const users = Object.entries(Roles).map(([name, role]) => ({
-    id: `demo-user-${name.toLowerCase()}`, email: `${name.toLowerCase()}@relay.demo`, displayName: `Relay demo ${name.toLowerCase().replace('_', ' ')}`,
+    id: `demo-user-${name.toLowerCase()}`, email: `${name.toLowerCase()}@relay.demo`, displayName: `Judge ${name.toLowerCase().replaceAll('_', ' ')}`,
     role, source, ...(role === Roles.STORE_MANAGER ? { outletId: primary.id } : {}), createdAt, updatedAt: createdAt
   }));
   const specs = [
@@ -23,24 +23,24 @@ export function makeDemo(network) {
     ['capacity', primary, Math.floor(Math.max(...network.vehicles.map(item => Number(item.weightCapacityKg))) / 13) + 1, TemperatureRequirement.AMBIENT, OrderStatus.DEFERRED, 'Oversized request exceeds every supplied vehicle weight capacity; dispatcher must defer or reconcile it']
   ];
   const orders = specs.map(([key, outlet, cartons, temperatureRequirement, status, demoScenario]) => ({
-    id: `demo-order-${key}`, orderNumber: `DEMO-${DEMO_DATE}-${key.toUpperCase()}`, outletId: outlet.id,
+    id: `demo-order-${key}`, orderNumber: `ORD-${DEMO_DATE}-${key.toUpperCase()}`, outletId: outlet.id,
     deliveryDate, status, temperatureRequirement, windowOpenTime: outlet.windowOpenTime, windowCloseTime: outlet.windowCloseTime,
     createdById: outlet.id === primary.id ? 'demo-user-store_manager' : null, source, demoScenario, createdAt, updatedAt: createdAt,
-    item: { id: `demo-item-${key}`, lineNumber: 1, productCode: temperatureRequirement === TemperatureRequirement.CHILLED ? 'DEMO-CHILLED' : 'DEMO-AMBIENT',
-      description: temperatureRequirement === TemperatureRequirement.CHILLED ? 'Relay demo chilled cartons' : 'Relay demo ambient cartons', cartons,
+    item: { id: `demo-item-${key}`, lineNumber: 1, productCode: temperatureRequirement === TemperatureRequirement.CHILLED ? 'WPF-CHILLED' : 'WPF-AMBIENT',
+      description: temperatureRequirement === TemperatureRequirement.CHILLED ? 'Chilled replenishment cartons' : 'Ambient replenishment cartons', cartons,
       unitWeightKg: '13', unitVolumeM3: '0.032', temperatureRequirement }
   }));
   const planned = orders.filter(order => order.status === OrderStatus.PLANNED);
   if (planned.reduce((sum, order) => sum + order.item.cartons * 13, 0) > Number(vehicle.weightCapacityKg) || planned.reduce((sum, order) => sum + order.item.cartons * 0.032, 0) > Number(vehicle.volumeCapacityM3)) throw new Error('Demonstration load exceeds selected vehicle capacity');
   return {
     users, orders,
-    trip: { id: 'demo-trip-01', tripNumber: `DEMO-${DEMO_DATE}-01`, deliveryDate, sequence: 1, depotId: vehicle.depotId, vehicleId: vehicle.id,
+    trip: { id: 'demo-trip-01', tripNumber: `TRIP-${DEMO_DATE}-01`, deliveryDate, sequence: 1, depotId: vehicle.depotId, vehicleId: vehicle.id,
       driverId: 'demo-user-driver', status: TripStatus.DRAFT, source, plannedDepartureAt: new Date(`${DEMO_DATE}T04:45:00+05:30`), createdAt, updatedAt: createdAt },
     stops: [primary, secondary].map((outlet, index) => ({ id: `demo-stop-${index + 1}`, tripId: 'demo-trip-01', outletId: outlet.id, position: index + 1 })),
     allocations: planned.map(order => ({ id: `demo-allocation-${order.id.slice(11)}`, orderId: order.id, outletId: order.outletId, tripId: 'demo-trip-01',
       tripStopId: order.outletId === primary.id ? 'demo-stop-1' : 'demo-stop-2', allocatedAt: createdAt })),
     deferral: { id: 'demo-deferral-capacity', orderId: 'demo-order-capacity', reason: DeferralReason.CAPACITY,
-      explanation: 'Relay-created example: requested cartons exceed the largest supplied vehicle weight capacity.', impact: 'Requires dispatcher reconciliation before a feasible trip can be released.',
+      explanation: 'Requested cartons exceed the largest available vehicle weight capacity.', impact: 'Dispatcher review is required before scheduling.',
       deferredById: 'demo-user-dispatcher', deferredAt: createdAt, nextEligibleDate: new Date('2025-01-03T00:00:00Z') },
     loadingStatus: LoadingStatus.PENDING, createdAt
   };

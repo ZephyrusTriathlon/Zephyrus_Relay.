@@ -68,23 +68,33 @@ function loginView() {
     const error=!identifier.value.trim()?'Enter your employee ID or email.':!password.value?'Enter your password.':'';
     const message=document.querySelector('#login-error');
     message.textContent=error;
-    if(error)return;
+    identifier.setAttribute('aria-invalid',String(!identifier.value.trim()));password.setAttribute('aria-invalid',String(!password.value));
+    if(error){(!identifier.value.trim()?identifier:password).focus();return;}
     const button=event.currentTarget.querySelector('[type="submit"]');button.disabled=true;
     try {
       await authRequest('login',{identifier:identifier.value,password:password.value});
       await refreshIdentity();
       const reveal=role==='dispatch' && pendingDispatchOrderId && dispatchHandoff(pendingDispatchOrderId);
       if(reveal){render();finishDispatchHandoff();}
-    } catch(error) {message.textContent=error.message;}
+    } catch(error) {message.textContent=userFacingError(error,'Unable to sign in. Check your connection and try again.');}
     finally {button.disabled=false;}
   });
 }
 
 function badge(text) {
-  const tone = /Delivered|Ready|Confirmed|Loaded|Resolved|Available|Healthy/.test(text) ? 'green' : /Issue|Missing|Damaged|mismatch/.test(text) ? 'red' : /Pending|Loading|Low stock|Reorder|Priority|Deferred/.test(text) ? 'amber' : '';
+  const tone = /Delivered|Ready|Confirmed|Loaded|Resolved|Available|Healthy|Completed|Received|Receipt confirmed|Synced/.test(text) ? 'green' : /Issue|Missing|Damaged|mismatch/.test(text) ? 'red' : /Pending|Loading|Low stock|Reorder|Priority|Deferred/.test(text) ? 'amber' : '';
   return `<span class="badge ${tone}">${esc(text)}</span>`;
 }
 
+function operationalLabel(value) {
+  return ({DRAFT:'Draft',CONFIRMED:'Confirmed',PLANNED:'Scheduled',RELEASED:'Released',LOADING:'Loading',READY:'Ready',IN_PROGRESS:'In progress',IN_DELIVERY:'In transit',ARRIVED:'Arrived',DELIVERED:'Delivered',RECEIVED:'Receipt confirmed',COMPLETED:'Completed',DEFERRED:'Deferred',PENDING:'Pending',LOADED:'Loaded',OPEN:'Open',RESOLVED:'Resolved',CANCELLED:'Cancelled',AMBIENT:'Ambient',CHILLED:'Chilled',REEFER:'Refrigerated',TRUCK:'Truck',VAN:'Van',NORMAL:'Standard access',VAN_ONLY:'Van only',MALL_DOCK:'Mall dock',CAPACITY:'Capacity',TEMPERATURE:'Temperature',ACCESS:'Access',DELIVERY_WINDOW:'Delivery window',FUEL:'Fuel quota'})[value] || String(value).toLowerCase().replaceAll('_',' ').replace(/^./, c=>c.toUpperCase());
+}
+const userFacingError=(error,fallback)=>error instanceof TypeError||['TimeoutError','AbortError'].includes(error.name)?fallback:error.message;
+function deferralExplanation(decision) {
+  const summary=decision.explanation.split(' Candidate rejection codes:')[0];
+  const messages=[...new Set((decision.planningContext?.rejections||[]).flatMap(candidate=>candidate.violations.map(v=>v.message)))];
+  return [summary,...messages.slice(0,3)].join(' ');
+}
 function lifecycle(order) {
   const status = order.status === 'Issue' ? order.previousStatus : order.status;
   const step = status === 'Delivered' ? 4 : status === 'In transit' ? 3 : ['Loading','Ready'].includes(status) ? 2 : order.route ? 1 : 0;
@@ -97,7 +107,7 @@ function offlineBanner() {
 }
 
 function render() {
-  if(!identityReady){document.querySelector('#app').textContent='Checking session?';return;}
+  if(!identityReady){document.querySelector('#app').innerHTML='<main class="login-page"><p role="status">Checking your session…</p></main>';return;}
   const account=currentAccount();
   if(!account){loginView();return;}
   role=account.workspace;
@@ -109,8 +119,8 @@ function render() {
     <aside class="sidebar">
       <a class="brand" href="#${role}" aria-label="Relay workspace home"><span class="brand-mark">⇄</span><span>relay<span class="brand-dot">.</span></span></a>
       <div class="workspace-label">Your workspace</div>
-      <nav class="nav" aria-label="Workspace navigation"><button data-action="workspace-home" class="active" aria-current="page" title="${r.name}">${icon(r.icon)}<span>${r.short}</span></button><button data-action="account" title="Your account">${icon('grid')}<span>Account</span></button><button data-action="activity" title="Notification" aria-label="Open activity feed"><span class="notification-icon">${icon('bell')}${state.pending.length?'<span class="notification-dot"></span>':''}</span><span>Notification</span></button></nav>
-      <div class="sidebar-bottom"><div class="demo-note"><b>Waypoint Group delivery network</b><span>Peliyagoda distribution centre</span><span>Colombo, Sri Lanka</span></div><div class="profile"><span class="avatar">${r.initials}</span><div class="stack"><b>${r.user}</b><small>${r.title}</small></div></div></div>
+      <nav class="nav" aria-label="Workspace navigation"><button data-action="workspace-home" class="active" aria-current="page" title="${r.name}">${icon(r.icon)}<span>${r.short}</span></button><button data-action="account" title="Your account">${icon('grid')}<span>Account</span></button><button data-action="activity" title="Activity" aria-label="Open activity feed"><span class="notification-icon">${icon('bell')}</span><span>Activity</span></button></nav>
+      <div class="sidebar-bottom"><div class="demo-note"><b>Waypoint Group delivery network</b><span>Delivery operations · Sri Lanka</span></div><div class="profile"><span class="avatar">${esc(r.initials)}</span><div class="stack"><b>${r.user}</b><small>${r.title}</small></div></div></div>
     </aside>
     <div class="shell">
       <main id="main" tabindex="-1" class="view-${role}">${role === 'dispatch' ? dispatchView() : role === 'store' ? storeView() : role === 'loader' ? loaderView() : deliveryView()}</main>

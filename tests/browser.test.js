@@ -614,10 +614,10 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     assert.match(await mainText(),/R-07 historical simulation/);
     await run('resetPlanningData();render()');
     assert.equal(await run('serverPlanning'),true);
-    assert.match(await mainText(),/Dispatch planning/);
+    assert.match(await mainText(),/Next-day dispatch/);
     await run('window.relayDevTools=false;serverPlanning=false;render()');
     assert.equal(await run("document.querySelector('[data-action=planning-prototype]')"),null);
-    assert.match(await mainText(),/Dispatch planning/);
+    assert.match(await mainText(),/Next-day dispatch/);
     await run('window.relayDevTools=true;serverPlanning=true;render()');
     await input('#planning-date',date,'change');await click('[data-action="planning-load"]');
     await waitFor('!!planningDay && !planningBusy');assert.equal(await run('planningDay.orders.length'),3);
@@ -626,7 +626,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     const truck=await db.vehicle.findFirst({where:{depotId:fresh.depotId,type:'TRUCK',temperature:'AMBIENT'}});
     await input('#planning-vehicle',truck.id,'change');await click('[data-action="planning-validate"]');
     await waitFor('planningResult?.kind==="validation" && !planningBusy');
-    assert.match(await mainText(),/REFRIGERATION_REQUIRED/);assert.match(await mainText(),/VAN_ACCESS_REQUIRED/);
+    assert.ok(await run('planningResult.violations.some(v=>v.code==="REFRIGERATION_REQUIRED")'));assert.ok(await run('planningResult.violations.some(v=>v.code==="VAN_ACCESS_REQUIRED")'));assert.match(await mainText(),/reefer|refrigerat/i);assert.match(await mainText(),/van/i);
     const van=await db.vehicle.findFirst({where:{depotId:fresh.depotId,type:'VAN',temperature:'REEFER'},orderBy:{id:'asc'}});
     await input('#planning-vehicle',van.id,'change');assert.equal(await run("document.querySelector('#planning-result')"),null,'Editing the candidate clears stale validation');await click(`[data-planning-order="${orders[1].id}"]`);
     await click('[data-action="planning-validate"]');await waitFor('planningResult?.kind==="validation" && !planningBusy');
@@ -635,7 +635,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     await click('[data-action="planning-allocate"]');await waitFor('planningResult?.kind==="allocation" && !planningBusy');
     assert.equal(await run('planningResult.trips.length'),1);assert.equal(await run('planningResult.deferrals.length'),1);
     planningTripIds.push(...await run('planningResult.trips.map(t=>t.id)'));
-    assert.match(await mainText(),/CAPACITY_WEIGHT/);assert.match(await mainText(),/DRAFT/);
+    assert.ok(await run('planningResult.deferrals.some(d=>d.rejections.some(r=>r.violations.some(v=>v.code==="CAPACITY_WEIGHT")))'));assert.match(await mainText(),/Draft/);
     const allocations=await db.allocation.findMany({where:{orderId:{in:orders.map(o=>o.id)}},include:{trip:true}});
     assert.equal(allocations.length,2);assert.equal(new Set(allocations.map(a=>a.tripId)).size,1);assert.ok(allocations.every(a=>a.trip.status==='DRAFT'));
     await click('[data-action="planning-allocate"]');await waitFor('planningResult?.kind==="allocation" && !planningBusy');
@@ -654,7 +654,7 @@ test('Relay: connected order, planning constraints, field exceptions and respons
     await screenshot('stage06-released-plan');
     await viewport(360,844);assert.ok(await run('document.documentElement.scrollWidth<=innerWidth'));await screenshot('stage06-dispatch-360');await viewport(1440,1000);
     await input('#planning-date','2030-01-01','change');await click('[data-action="planning-load"]');await waitFor('!!planningError && !planningBusy');
-    assert.match(await mainText(),/INVALID_PLANNING_DATE/);
+    assert.match(await mainText(),/operating date/i);
     assert.equal(await run('JSON.stringify(state)'),prototype,'Saved planning actions do not mutate the R-07 simulation');
     await login('store');assert.equal(await run('planningDay'),null);assert.equal(await run('planningResult'),null);
     await login('dispatcher');assert.equal(await run('serverPlanning'),false);

@@ -6,6 +6,7 @@ const vm=require('node:vm');
 test('a superseded Store refresh waits for the authoritative latest read before confirming creation',async()=>{
   const requests=[];
   const context=vm.createContext({
+    AbortSignal,userFacingError:(error)=>error.message,
     currentAccount:()=>({id:'owned-store',workspace:'store'}),render:()=>{},
     fetch:path=>new Promise(resolve=>requests.push({path,resolve})),
   });

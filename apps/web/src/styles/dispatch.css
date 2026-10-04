@@ -123,3 +123,27 @@ dialog>.route-state { margin-bottom:16px; }dialog>.route-outcome { margin-top:0;
 .outlook-list{display:grid;gap:8px;margin:18px 0}.outlook-list>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 16px;padding:14px;border:1px solid var(--line);border-radius:6px}.outlook-list b{color:var(--accent)}.outlook-list small{grid-column:1/-1}
 @media(max-width:1100px){.constraint-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:560px){.constraint-grid{grid-template-columns:1fr}.order-decision-actions{width:100%;justify-content:space-between}.order-decision-actions .assign-btn{flex:1}}
+
+/* Persisted planning retains the submitted queue / route / vehicle silhouette. */
+.planning-date-controls { display:flex; align-items:flex-end; flex-wrap:wrap; gap:12px; margin:0 0 24px; }
+.planning-date-controls label { min-width:0; max-width:280px; flex:1; }.planning-date-controls .input { margin-top:6px; }
+.live-runbar { display:flex; overflow-x:auto; }.live-runbar button { flex:1 0 240px; min-width:0; overflow-wrap:anywhere; }
+.live-planning .order-card { overflow-wrap:anywhere; }.live-planning .order-title { min-height:0; margin:8px 0; }
+.live-planning .order-bottom { flex-wrap:wrap; }.live-planning input[type="checkbox"] { width:20px; height:20px; accent-color:var(--accent); }
+.live-planning .fit-note { display:block; }.live-planning .fit-note summary { cursor:pointer; min-height:44px; padding:8px 0; }.live-planning .fit-note p { margin:8px 0; }
+.live-planning .route-heading { gap:12px; flex-wrap:wrap; }.live-planning .route-heading .eyebrow { overflow-wrap:anywhere; }
+.live-planning .constraint-check small { font-size:12px; }.live-planning .stop-info { min-width:0; }.live-planning .stop-info small { overflow-wrap:anywhere; }
+.live-planning .stop { align-items:start; }.live-planning .stop-time { min-width:68px; }.live-planning .stop-time small { white-space:normal; }
+.live-planning .context .input { min-width:0; max-width:100%; padding-inline:8px; }
+.live-planning .capacity-facts>div { display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; padding:8px 0; }
+.planning-validation { margin:20px 0; padding-top:16px; border-top:1px solid var(--line); }.planning-validation summary,.live-fleet>summary { cursor:pointer; min-height:44px; padding:10px 0; font-weight:600; }
+.planning-validation .btn { margin-top:12px; }.planning-edit { border-top:1px solid var(--line); margin-top:20px; padding-top:12px; }
+.planning-edit label { display:block; margin:12px 0; }.planning-edit .input { margin-top:6px; }.planning-edit ol { padding-left:20px; }.planning-edit li { padding:8px 0; }
+.live-fleet { margin:20px 0; }.live-fleet .table-wrap { max-width:100%; overflow-x:auto; }.live-fleet table { min-width:620px; }
+.live-planning .btn { white-space:normal; }.live-planning .helper { margin:12px 0; }
+@media(max-width:760px) {
+  .live-runbar button { flex-basis:220px; }.planning-date-controls label { max-width:none; }
+  .live-planning .route-workspace { padding:20px 16px; }.live-planning .stop { gap:8px; }
+  .live-planning .stop-time { font-size:14px; }.live-planning .stop-time small { font-size:12px; }
+  .live-planning .constraint-grid { grid-template-columns:1fr; }.live-planning .context { padding:20px 16px; }
+}

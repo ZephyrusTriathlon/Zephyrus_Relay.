@@ -191,3 +191,9 @@ textarea.input { min-height:96px; resize:vertical; }
 .demo-account small { display:block; font-weight:400; }
 .demo-handoff { font-size:12px; }
 @media(max-width:430px) { .login-page { padding:24px 16px; } .login-card { padding:24px; } }
+
+.connection-status { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:12px 0 20px; padding:10px 14px; background:var(--soft); border:1px solid var(--line); border-radius:var(--radius); }
+.connection-status small { display:block; }.connection-status.needs-attention { background:var(--amber-bg); border-color:#dcc594; }
+.connection-status p { margin-top:8px; }.connection-status :is(.btn,.mini-btn) { flex-shrink:0; }
+.input[aria-invalid="true"] { border-color:var(--red); }
+@media(max-width:760px) { .connection-status { padding:10px 12px; font-size:13px; flex-wrap:wrap; }.connection-status b { font-weight:500; } }

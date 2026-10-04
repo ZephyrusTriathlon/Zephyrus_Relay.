@@ -157,8 +157,8 @@ const driverOffline=(()=>{
   function banner(){
     if(!active())return '';
     const pending=data.outbox.length,attention=data.outbox.some(m=>m.state==='NEEDS_ATTENTION');
-    const label=mode==='Syncing'?'Syncing':attention?'Needs attention':mode==='Offline'?'Offline':pending?'Pending sync':mode;
-    return `<section class="notice" aria-label="Connection and saved deliveries" role="status"><div><b>${label}</b><p>${pending?`${pending} saved action${pending===1?'':'s'} ${attention?'need review':'pending sync'}.`:data.lastRefresh?'Deliveries are up to date.':'Open an assigned trip while online.'} ${shellReady&&data.lastRefresh?'Trip saved for offline use.':''}</p>${data.lastRefresh?`<small>Last refreshed ${esc(fieldTime(data.lastRefresh))}</small>`:''}${data.outbox.filter(m=>m.lastError).map(m=>`<p>${esc(m.lastError.message)}</p>`).join('')}<button class="btn" data-action="driver-sync" ${mode==='Syncing'?'disabled':''}>${attention?'Retry sync':'Sync now'}</button>${attention?'<p>Contact dispatch if the issue remains. Saved work has not been discarded.</p>':''}</div></section>`;
+    const label=mode==='Syncing'?'Syncing':attention?'Needs attention':mode==='Offline'?`Offline — ${pending} update${pending===1?'':'s'} waiting to sync`:pending?`${pending} updates pending sync`:data.lastRefresh?'Synced — all updates saved':'Online';
+    return `<section class="connection-status ${attention||mode==='Offline'?'needs-attention':''}" aria-label="Connection and saved deliveries" role="status"><div><b>${esc(label)}</b>${shellReady&&data.lastRefresh?'<small>Trip saved for offline use.</small>':''}${attention?`${data.outbox.filter(m=>m.lastError).map(m=>`<p>${esc(m.lastError.message)}</p>`).join('')}<p>Contact dispatch if the issue remains. Saved work is retained.</p>`:''}</div><button class="${pending||attention?'btn':'mini-btn'}" data-action="driver-sync" ${mode==='Syncing'||!navigator.onLine?'disabled':''}>${attention?'Retry sync':'Sync now'}</button></section>`;
   }
   async function maySignOut(){
     if(!active())return true;

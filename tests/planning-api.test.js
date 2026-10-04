@@ -90,9 +90,13 @@ test('Dispatcher planning APIs persist valid drafts and explainable deferrals at
     const truck=fleet.find(v=>v.type==='TRUCK'&&v.depotId===outlet.depotId);
     const invalid=await request('/planning/edit',dispatcher,{...body,vehicleId:truck.id});assert.equal(invalid.status,200);assert.equal((await invalid.json()).accepted,false);
     assert.equal(JSON.stringify(await getTrip()),original);
-    const valid=await request('/planning/edit',dispatcher,{...body,departureMinute:241});assert.equal(valid.status,200);assert.equal((await valid.json()).accepted,true);
+    const driver=await db.user.findFirstOrThrow({where:{role:'DRIVER',active:true}}),wrongRole=await db.user.findFirstOrThrow({where:{role:'STORE_MANAGER'}});
+    for(const driverId of [wrongRole.id,'missing-driver'])assert.equal((await request('/planning/edit',dispatcher,{...body,driverId})).status,400);
+    assert.equal(JSON.stringify(await getTrip()),original,'Rejected assignment leaves the draft intact');
+    const valid=await request('/planning/edit',dispatcher,{...body,departureMinute:241,driverId:driver.id});assert.equal(valid.status,200);assert.equal((await valid.json()).accepted,true);
     assert.equal((await request('/planning/edit',dispatcher,body)).status,409);
-    trip=await getTrip();assert.equal(trip.planningContext.metrics.departureMinute,241);
+    trip=await getTrip();assert.equal(trip.planningContext.metrics.departureMinute,241);assert.equal(trip.driverId,driver.id);
+    const day=await(await request(`/planning/day/${date}`,dispatcher)).json();assert.ok(day.drivers.some(d=>d.id===driver.id));assert.equal(day.trips[0].driver.displayName,driver.displayName);assert.doesNotMatch(JSON.stringify(day.drivers),/passwordHash/);
     const item=await db.orderItem.findFirst({where:{orderId:ids[0]}});
     await db.orderItem.update({where:{id:item.id},data:{cartons:1000000}});
     try{

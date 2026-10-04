@@ -22,11 +22,11 @@ All four judge accounts use **RelayDemo!26**, via the ordinary login form:
 | store@relay.demo / store | Store Manager, OUT004 |
 | dispatcher@relay.demo / dispatcher | Dispatcher |
 | loader@relay.demo / loader | Loader, Peliyagoda depot |
-| driver@relay.demo / driver | Driver assigned to DEMO-2025-01-02-01 |
+| driver@relay.demo / driver | Driver assigned to TRIP-2025-01-02-01 |
 
 Follow the [complete numbered judge walkthrough](docs/walkthroughs/judge-walkthrough.md), including real network-offline delivery and receipt. It intentionally begins with seeded orders for **2025-01-02** because the reference calendar is historical. No clock override, browser reset or SQL mutation is required. To repeat from scratch, use a separate Compose project (`docker compose -p relay-second up`) and an unused APP_PORT; this creates a separate volume without deleting prior work.
 
-**Verification status:** see [final report](docs/final-report.md) for exact executed checks and blockers. Docker commands require independent execution on a Docker-capable host; do not interpret native database testing as a passed container build.
+**Verification status:** see the [Stage 10 report](docs/stage10-report.md) for executed native and Docker checks, visual review, preserved workflows and remaining submission blockers. The [Stage 9 report](docs/final-report.md) remains a historical record.
 
 ## Architecture and repository
 
@@ -61,7 +61,7 @@ Open http://localhost:3001. `npm run dev` instead starts Vite at http://localhos
 
 The public [judge network](prisma/judge-data/README.md) is independently generated synthetic data, not the confidential competition CSVs. It has 120 outlets, 60 vehicles, two depots, travel/service references and 910 calendar days. Authorized official-data testing can set `RELAY_DATA_DIR=data` in a separate database with all five required CSVs under `data/General Data/`. Relative data paths resolve from the repository root, including workspace `npm start`. Never mix datasets in an existing operational database.
 
-Repeat seed updates imported reference rows and creates missing seed records; it preserves existing passwords, orders, trips, proofs, receipts and status history. It is not a reset. Disable `RELAY_ALLOW_SEED` after bootstrap. Schema changes use versioned migrations, never a manual `db push` prerequisite.
+Repeat seed updates imported reference rows and creates missing seed records; it preserves existing passwords, operational progress, proofs, receipts and status history. Stage 10 upgrades only the original application seed's account/product/order/trip labels to remove simulation wording. It is not a reset. Disable `RELAY_ALLOW_SEED` after bootstrap. Schema changes use versioned migrations, never a manual `db push` prerequisite.
 
 ## Configuration and deployment
 
@@ -89,7 +89,7 @@ npm test
 
 Linux/macOS: launch your Chrome/Chromium binary with the same flags and an absolute temporary profile path. CDP tests create isolated browser contexts. The historical browser suite intentionally enables prototype controls for compatibility coverage; Stage 7/8 and final judge checks use the default built app. Some historical regression assertions require authorized competition references; the final judge test uses the public network. See the final report for exact commands, datasets and counts.
 
-For acceptance of the public scenario, configure a **separate fresh** database with `RELAY_DATA_DIR=prisma/judge-data`, migrate/seed/build it, start the QA Chrome instance, then set `RELAY_JUDGE_TEST=true` and run `npm run test:judge`. This intentionally completes the seeded route and both Store receipts, verifies all eight viewport widths and real network-offline reconciliation, and reruns seed to prove progress is retained. It refuses an already advanced main trip; it does not reset data. Do not enable this flag on the database you intend to demonstrate manually.
+For acceptance of the public scenario, configure a **separate fresh** database with `RELAY_DATA_DIR=prisma/judge-data`, migrate/seed/build it, start the QA Chrome instance, then set `RELAY_JUDGE_TEST=true` and run `npm run test:judge`. This intentionally completes the seeded route and both Store receipts, verifies eleven viewport widths and real network-offline reconciliation, and reruns seed to prove progress is retained. It refuses an already advanced main trip; it does not reset data. Optional `RELAY_JUDGE_BASE_URL` targets a running isolated app backed by the same test database, including Docker. Do not enable this flag on the database you intend to demonstrate manually. The full suite also exercises a newly submitted order through all four production views in `tests/product-workflow.test.js`, with a historical clock injected only into that test instance.
 
 ## Assumptions, limitations and Designathon continuity
 
@@ -97,8 +97,21 @@ Planning enforces weight, volume, refrigeration, van-only access, depot, deliver
 
 Only the Driver supports durable offline mutation. Start/finish reconciliation and initial login/cache acquisition need connectivity; Loader and Store mutations require online service. Browser storage deletion/eviction can lose unsynchronized work. Another account cannot unlock the former Driver's encrypted vault. Unresolved conflicts remain visible and require operational resolution; there is no silent overwrite/discard.
 
-The historical calendar ends 2026-06-28. New real-clock ordering needs an authorized later calendar import; the default walkthrough uses existing historical orders. For an optional local new-order demo only, set `RELAY_DEMO_ORDER_NOW=2025-01-03T15:59:00+05:30` with `NODE_ENV=development`, restart the API, then remove it afterward. Assisted allocation does not assign a Driver; the documented seed route is assigned. Driver assignment administration, inventory integration, real contact/address data and live maps/routing are outside this implementation. Stock suggestions remain illustrative.
+The historical calendar ends 2026-06-28. New real-clock ordering needs an authorized later calendar import; the default walkthrough uses existing historical orders. For an optional local new-order demo only, set `RELAY_DEMO_ORDER_NOW=2025-01-03T15:59:00+05:30` with `NODE_ENV=development`, restart the API, then remove it afterward. Assisted allocation creates unassigned drafts; Dispatcher draft review now assigns an active Driver before release. Account provisioning, Driver availability optimization, inventory integration, real contact/address data and live maps/routing remain outside this implementation. Production displays the product catalogue without fabricated stock levels or replenishment suggestions.
 
-The original visual language and field interaction hierarchy remain. Real authentication replaces account/role switching; PostgreSQL replaces browser operational storage; server feasibility/release replaces planning simulation; released manifests replace field fixtures; real SW/IndexedDB sync replaces the offline toggle. Production Dispatcher uses a date/queue/saved-trip layout to expose persisted multi-trip planning. The [fidelity and requirements audit](docs/final-audit.md) classifies all meaningful departures. Historical Day-5 assets were not rewritten.
+## Significant departures from Designathon
+
+The screenshot typography, green/off-white palette, rail navigation, card treatment, Store basket, Loader sequence, Driver bottom actions and receipt sheets remain the presentation foundation. All fourteen submitted screenshots were opened before Stage 10 UI edits; the [Stage 10 fidelity audit](docs/stage10-report.md) records the per-screen classification. Historical Day-5 assets and competition datasets were not rewritten.
+
+| Original design | Final behavior | Reason |
+| --- | --- | --- |
+| Account/role switcher | Ordinary role-scoped login and sign-out | Authentication and authorization require real sessions; no authentication screenshot exists. |
+| Single illustrative Dispatcher run | Queue / route / vehicle panels with saved-trip selector, day picker, assisted allocation, draft Driver/vehicle/sequence review and Confirm plan | Preserve screenshot composition while exposing actual multi-trip planning and validated release. |
+| Per-order illustrative assign/defer | Assisted allocation plus recorded deferral reasons, history and explicit retry | The existing feasibility engine decides full-order placement; a cosmetic manual decision must not bypass constraints. |
+| Route drawing, sample addresses/contacts and navigation | Persisted stop sequence, outlet/district and estimated arrival; ungrounded map/contact buttons omitted | Reference records contain no street address, phone number, coordinates or routing service. |
+| Stock counts, stock health and suggested quantities | Searchable catalogue, full-carton quantities and basket; stock simulation only behind development build flag | Inventory quantities and recommendation feeds are unavailable. |
+| Simulated offline / reconnected state | Compact live connection banner, encrypted outbox, real pending/conflict states and Sync now | Actual network loss and durable reconciliation replace a toggle; pending work is never presented as server completion. |
+
+Existing working exceptions, POD verification, receipt discrepancies, refresh, retries and account isolation remain available. These are functional extensions styled with the submitted patterns. Only the Driver supports durable offline mutations.
 
 Required documentation: [architecture](docs/architecture.md), [data model](docs/data-model.md), [AI disclosure](docs/ai-disclosure.md), [judge walkthrough](docs/walkthroughs/judge-walkthrough.md), [offline behavior and exact DevTools steps](docs/walkthroughs/stage-08-offline.md), [final report](docs/final-report.md).

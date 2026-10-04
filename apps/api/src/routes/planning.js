@@ -20,7 +20,7 @@ async function context(db,date) {
   const week=weekBounds(date);
   const [vehicles,depots,trips]=await Promise.all([
     db.vehicle.findMany({orderBy:{id:'asc'}}),db.depot.findMany(),
-    db.trip.findMany({where:{deliveryDate:{gte:day(week.start),lt:day(week.end)}},include:{vehicle:true,stops:{orderBy:{position:'asc'},include:{allocations:{include:{order:{include:includeOrder},loadingCheck:true,loadingIssues:true,exceptions:true,proof:{include:{receipt:true}}}}}}},orderBy:{id:'asc'}})
+    db.trip.findMany({where:{deliveryDate:{gte:day(week.start),lt:day(week.end)}},include:{vehicle:true,driver:{select:{id:true,displayName:true}},stops:{orderBy:{position:'asc'},include:{allocations:{include:{order:{include:includeOrder},loadingCheck:true,loadingIssues:true,exceptions:true,proof:{include:{receipt:true}}}}}}},orderBy:{id:'asc'}})
   ]);
   const data=await loadPlanningData(depots);
   const existingTrips=trips.map(trip=>{
@@ -48,7 +48,8 @@ export function planningRoutes({database=getDatabase}={}) {
     const snapshot=await db.$transaction(async tx=>{
       const c=await context(tx,date);
       const orders=await tx.order.findMany({where:{deliveryDate:day(date)},include:{...includeOrder,allocation:true},orderBy:{id:'asc'}});
-      return {date,policy:PLANNING_POLICY,orders,vehicles:c.vehicles,trips:c.trips.filter(t=>key(t.deliveryDate)===date),reservations:c.existingTrips};
+      const drivers=await tx.user.findMany({where:{role:'DRIVER',active:true},select:{id:true,displayName:true},orderBy:{displayName:'asc'}});
+      return {date,policy:PLANNING_POLICY,orders,drivers,vehicles:c.vehicles,trips:c.trips.filter(t=>key(t.deliveryDate)===date),reservations:c.existingTrips};
     },{isolationLevel:'RepeatableRead',timeout:30000});
     res.json(snapshot);
   }));
@@ -81,7 +82,7 @@ export function planningRoutes({database=getDatabase}={}) {
       const now=new Date(),ids=new Map();
       for(const proposed of plan.trips){
         const metrics=proposed.validation.metrics;
-        const trip=await tx.trip.create({data:{tripNumber:`PLAN-${randomUUID()}`,deliveryDate:day(date),sequence:proposed.sequence,depotId:proposed.vehicle.depotId,vehicleId:proposed.vehicle.id,status:'DRAFT',plannedDepartureAt:at(date,metrics.departureMinute),planningContext:{policy:PLANNING_POLICY,metrics,decisions:plan.decisions.filter(d=>d.tripId===proposed.id)}}});
+        const trip=await tx.trip.create({data:{tripNumber:`TRIP-${date.replaceAll('-','')}-${randomUUID().replaceAll('-','').slice(0,12).toUpperCase()}`,deliveryDate:day(date),sequence:proposed.sequence,depotId:proposed.vehicle.depotId,vehicleId:proposed.vehicle.id,status:'DRAFT',plannedDepartureAt:at(date,metrics.departureMinute),planningContext:{policy:PLANNING_POLICY,metrics,decisions:plan.decisions.filter(d=>d.tripId===proposed.id)}}});
         ids.set(proposed.id,trip.id);
         for(const [index,stop] of metrics.stops.entries()){
           const stored=await tx.tripStop.create({data:{tripId:trip.id,outletId:stop.outletId,position:index+1,expectedAt:at(date,stop.arrivalMinute)}});
@@ -106,16 +107,17 @@ export function planningRoutes({database=getDatabase}={}) {
     },{timeout:60000,maxWait:10000});
     res.json(result);
   }));
-  // Draft edits preserve allocation identity; only vehicle, departure and stop order
+  // Draft edits preserve allocation identity; vehicle, Driver, departure and stop order
   // are mutable here. All writers use the same lock as assisted allocation.
   router.post('/edit',run(async(req,res)=>{
-    const parsed=z.strictObject({date:z.iso.date(),tripId:z.string().min(1),version:z.string().datetime(),vehicleId:z.string().min(1),departureMinute:z.number().int().min(0).max(1439),orderIds:z.array(z.string()).min(1).max(200)}).safeParse(req.body);
+    const parsed=z.strictObject({date:z.iso.date(),tripId:z.string().min(1),version:z.string().datetime(),vehicleId:z.string().min(1),driverId:z.string().min(1).nullable().optional(),departureMinute:z.number().int().min(0).max(1439),orderIds:z.array(z.string()).min(1).max(200)}).safeParse(req.body);
     if(!parsed.success)throw error('INVALID_PLANNING_INPUT','Provide a draft version, vehicle, departure and ordered manifest.');
     const input=parsed.data;
     const result=await database().$transaction(async tx=>{
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(76605)`;
       const c=await context(tx,input.date),trip=c.trips.find(t=>t.id===input.tripId&&key(t.deliveryDate)===input.date);
       if(!trip||trip.status!=='DRAFT'||trip.updatedAt.toISOString()!==input.version)throw error('PLANNING_CONFLICT','Draft changed; reload before editing.',409);
+      if(input.driverId&&!await tx.user.findFirst({where:{id:input.driverId,role:'DRIVER',active:true},select:{id:true}}))throw error('INVALID_DRIVER','Choose an active Driver account.');
       const orders=trip.stops.flatMap(s=>s.allocations.map(a=>a.order));
       if(orders.some(o=>o.status!=='PLANNED'||key(o.deliveryDate)!==input.date))throw error('INVALID_PLAN','Draft orders must remain planned for this date.',409);
       if(input.orderIds.length!==orders.length||new Set(input.orderIds).size!==orders.length||input.orderIds.some(id=>!orders.some(o=>o.id===id)))throw error('INVALID_PLANNING_INPUT','Manual review must retain every order in this manifest exactly once.');
@@ -127,7 +129,7 @@ export function planningRoutes({database=getDatabase}={}) {
       if(vehicle.id!==trip.vehicleId){sequence=1;while(c.trips.some(t=>t.vehicleId===vehicle.id&&key(t.deliveryDate)===input.date&&t.sequence===sequence))sequence++;}
       for(const stop of trip.stops)await tx.tripStop.update({where:{id:stop.id},data:{position:stop.position+10000}});
       for(const [i,stop] of validation.metrics.stops.entries())await tx.tripStop.update({where:{id:trip.stops.find(s=>s.outletId===stop.outletId).id},data:{position:i+1,expectedAt:at(input.date,stop.arrivalMinute)}});
-      await tx.trip.update({where:{id:trip.id},data:{vehicleId:vehicle.id,depotId:vehicle.depotId,sequence,plannedDepartureAt:at(input.date,input.departureMinute),planningContext:{...trip.planningContext,metrics:validation.metrics,review:{actorId:req.user.id,at:new Date().toISOString(),explanation:'Dispatcher changed vehicle, departure or stop order; server validation passed.'}}}});
+      await tx.trip.update({where:{id:trip.id},data:{vehicleId:vehicle.id,depotId:vehicle.depotId,...(input.driverId!==undefined?{driverId:input.driverId}:{}),sequence,plannedDepartureAt:at(input.date,input.departureMinute),planningContext:{...trip.planningContext,metrics:validation.metrics,review:{actorId:req.user.id,at:new Date().toISOString(),explanation:'Dispatcher reviewed the assignment and manifest; all planning constraints passed.'}}}});
       return {accepted:true,...validation};
     },{timeout:60000,maxWait:10000});
     res.json(result);
